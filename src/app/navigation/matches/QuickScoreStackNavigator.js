@@ -2,7 +2,7 @@ import React from "react";
 
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import AppHeader from "../../../components/common/AppHeader";
+import NavigationHeader from "../../../components/common/NavigationHeader";
 
 import QuickScoreScreen from "../../../features/matches/screens/QuickScoreScreen";
 import TeamSelectionScreen from "../../../features/matches/screens/TeamSelectionScreen";
@@ -21,114 +21,119 @@ import WicketDismissalModal from "../../../features/matches/screens/WicketDismis
 
 const Stack = createNativeStackNavigator();
 
+const renderHeader = ({ route }) => {
+  return <NavigationHeader route={route} />;
+};
+
 export default function QuickScoreStackNavigator() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        header: renderHeader,
+      }}
+    >
       {/* 1 */}
       <Stack.Screen
         name="QuickScoreScreen"
         component={QuickScoreScreen}
-        options={{
-          header: () => <AppHeader title="Match Setup" showBack />,
-        }}
+        // options={{
+        //   header: () => <AppHeader title="Match Setup" showBack />,
+        // }}
       />
 
       {/* 2 */}
       <Stack.Screen
         name="TeamSelectionScreen"
         component={TeamSelectionScreen}
-        options={{
-          header: () => <AppHeader title="Select Teams" showBack />,
-        }}
+        // options={{
+        //   header: () => <AppHeader title="Select Teams" showBack />,
+        // }}
       />
 
       {/* 3 */}
       <Stack.Screen
         name="SquadSelectionScreen"
         component={SquadSelectionScreen}
-        options={{
-          header: () => <AppHeader title="Select Squad" showBack />,
-        }}
+        // options={{
+        //   header: () => <AppHeader title="Select Squad" showBack />,
+        // }}
       />
 
       {/* 4 */}
       <Stack.Screen
         name="TossScreen"
         component={TossScreen}
-        options={{
-          header: () => <AppHeader title="Toss Session" showBack />,
-        }}
+        // options={{
+        //   header: () => <AppHeader title="Toss Session" showBack />,
+        // }}
       />
 
       {/* 5 */}
       <Stack.Screen
         name="PlayingXISelectionScreen"
         component={PlayingXISelectionScreen}
-        options={{
-          header: () => <AppHeader title="Playing XI" showBack />,
-        }}
       />
 
       {/* 6 */}
       <Stack.Screen
         name="LiveScoringScreen"
         component={LiveScoringScreen}
-        options={{
-          gestureEnabled: false,
+        // options={{
+        //   gestureEnabled: false,
 
-          header: () => <AppHeader title="CricIn Live" showBack={false} />,
-        }}
+        //   header: () => <AppHeader title="CricIn Live" showBack={false} />,
+        // }}
       />
 
       {/* 7 */}
       <Stack.Screen
         name="OverSummaryScreen"
         component={OverSummaryScreen}
-        options={{
-          header: () => <AppHeader title="Over Summary" showBack />,
-        }}
+        // options={{
+        //   header: () => <AppHeader title="Over Summary" showBack />,
+        // }}
       />
 
       {/* 8 */}
       <Stack.Screen
         name="InningsSummaryScreen"
         component={InningsSummaryScreen}
-        options={{
-          gestureEnabled: false,
+        // options={{
+        //   gestureEnabled: false,
 
-          header: () => <AppHeader title="Innings Summary" showBack={false} />,
-        }}
+        //   header: () => <AppHeader title="Innings Summary" showBack={false} />,
+        // }}
       />
 
       {/* 9 */}
       <Stack.Screen
         name="SecondInningsScreen"
         component={SecondInningsScreen}
-        options={{
-          gestureEnabled: false,
+        // options={{
+        //   gestureEnabled: false,
 
-          header: () => <AppHeader title="Second Innings" showBack={false} />,
-        }}
+        //   header: () => <AppHeader title="Second Innings" showBack={false} />,
+        // }}
       />
 
       {/* 10 */}
       <Stack.Screen
         name="MatchResultScreen"
         component={MatchResultScreen}
-        options={{
-          gestureEnabled: false,
+        // options={{
+        //   gestureEnabled: false,
 
-          header: () => <AppHeader title="Match Result" showBack={false} />,
-        }}
+        //   header: () => <AppHeader title="Match Result" showBack={false} />,
+        // }}
       />
 
       {/* 11 */}
       <Stack.Screen
         name="MatchCenterScreen"
         component={MatchCenterScreen}
-        options={{
-          header: () => <AppHeader title="Match Center" showBack />,
-        }}
+        // options={{
+        //   header: () => <AppHeader title="Match Center" showBack />,
+        // }}
       />
 
       <Stack.Screen

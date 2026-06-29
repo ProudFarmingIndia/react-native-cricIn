@@ -1,128 +1,279 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   SafeAreaView,
   ScrollView,
   View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
-
+import { useNavigation } from "@react-navigation/native";
+import {
+  getProfile,
+  updateProfile,
+  createPlayerProfile,
+} from "../store/profileSlice";
 import ProfileHeroCard from "../components/ProfileHeroCard";
 import PersonalInfoSection from "../components/PersonalInfoSection";
 import CricketInfoSection from "../components/CricketInfoSection";
 import FavoritesSection from "../components/FavoritesSection";
 import HighlightsSection from "../components/HighlightsSection";
 import GallerySection from "../components/GallerySection";
-
-import { getProfile, updateProfile, createPlayerProfile } from "../store/profileSlice";
+import PrimaryButton from "../../../components/Button/PrimaryButton";
+import useUpload from "../../upload/hooks/useUpload";
 import { COLORS } from "../../../constants/colors";
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
+
   const dispatch = useDispatch();
 
-  const { isCreated } = useSelector((state) => state.profile);
+  const { uploading, pickImage, pickVideo } = useUpload();
 
-  const [profile, setProfile] = useState({});
+  const { isCreated } = useSelector((state) => state.profile || {});
+
+  /*
+  |--------------------------------------------------------------------------
+  | Screen States
+  |--------------------------------------------------------------------------
+  */
+
+  const [profile, setProfile] = useState({
+    profileImage: {
+      url: "",
+      publicId: "",
+    },
+
+    playerName: "",
+
+    bio: "",
+
+    dob: "",
+
+    gender: "",
+
+    city: "",
+
+    state: "",
+
+    country: "India",
+
+    playerType: "",
+
+    battingStyle: "",
+
+    bowlingStyle: "",
+
+    jerseyNumber: "",
+
+    favoriteTeam: "",
+
+    favoriteCricketer: "",
+
+    favoriteShot: "",
+
+    favoriteBall: "",
+
+    achievements: [],
+
+    highlights: [],
+
+    gallery: [],
+  });
+
   const [fetching, setFetching] = useState(true);
+
   const [saving, setSaving] = useState(false);
 
+  /*
+  |--------------------------------------------------------------------------
+  | Load Profile
+  |--------------------------------------------------------------------------
+  */
+
   useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setFetching(true);
+
+        const result = await dispatch(getProfile());
+
+        if (getProfile.fulfilled.match(result)) {
+          setProfile(result.payload.data);
+        }
+      } catch (error) {
+        console.log(error);
+      } finally {
+        setFetching(false);
+      }
+    };
+
     loadProfile();
+  }, [dispatch]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update Local State
+  |--------------------------------------------------------------------------
+  */
+
+  const updateField = useCallback((key, value) => {
+    setProfile((previous) => ({
+      ...previous,
+      [key]: value,
+    }));
   }, []);
 
-  // ─── GET Profile ────────────────────────────────────────────────────────────
-  const loadProfile = async () => {
+  /*
+  |--------------------------------------------------------------------------
+  | Upload Profile Image
+  |--------------------------------------------------------------------------
+  */
+
+  const handleProfileImage = async () => {
+    const uploadedImage = await pickImage("players/profile");
+
+    if (!uploadedImage) return;
+
+    updateField("profileImage", uploadedImage);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Upload Gallery Image
+  |--------------------------------------------------------------------------
+  */
+
+  const handleGalleryImage = async () => {
+    const uploadedImage = await pickImage("players/gallery");
+
+    if (!uploadedImage) return;
+
+    updateField("gallery", [
+      ...profile.gallery,
+
+      {
+        type: "IMAGE",
+
+        url: uploadedImage.url,
+
+        publicId: uploadedImage.publicId,
+
+        uploadedAt: new Date(),
+      },
+    ]);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Upload Gallery Video
+  |--------------------------------------------------------------------------
+  */
+
+  const handleGalleryVideo = async () => {
+    const uploadedVideo = await pickVideo("players/gallery");
+
+    if (!uploadedVideo) return;
+
+    updateField("gallery", [
+      ...profile.gallery,
+
+      {
+        type: "VIDEO",
+
+        url: uploadedVideo.url,
+
+        publicId: uploadedVideo.publicId,
+
+        uploadedAt: new Date(),
+      },
+    ]);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Loading Screen
+  |--------------------------------------------------------------------------
+  */
+
+  /*
+  |--------------------------------------------------------------------------
+  | Create Player Profile
+  |--------------------------------------------------------------------------
+  */
+
+  const createProfile = async () => {
     try {
-      setFetching(true);
-      console.log("─────────────────────────────────────");
-      console.log("📡 [GET PROFILE] Calling API...");
-      console.log("   Endpoint: GET /api/players/me");
+      const payload = {
+        ...profile,
 
-      const result = await dispatch(getProfile());
+        playerName: profile.playerName || "",
+      };
 
-      if (getProfile.fulfilled.match(result)) {
-        console.log("✅ [GET PROFILE] Success");
-        console.log("   Data:", JSON.stringify(result.payload?.data, null, 2));
-        setProfile(result.payload?.data || {});
+      const result = await dispatch(createPlayerProfile(payload));
+
+      if (createPlayerProfile.fulfilled.match(result)) {
+        await dispatch(getProfile());
+
+        navigation.goBack();
       } else {
-        console.log("❌ [GET PROFILE] Failed");
-        console.log("   Error:", JSON.stringify(result.payload, null, 2));
-        setProfile({});
+        console.log(result.payload);
       }
-    } catch (err) {
-      console.log("💥 [GET PROFILE] Exception:", err.message);
-    } finally {
-      setFetching(false);
-      console.log("─────────────────────────────────────");
+    } catch (error) {
+      console.log(error);
     }
   };
 
-  // Generic field updater
-  const updateField = (key, value) => {
-    setProfile((prev) => ({ ...prev, [key]: value }));
+  /*
+  |--------------------------------------------------------------------------
+  | Update Profile
+  |--------------------------------------------------------------------------
+  */
+
+  const updateExistingProfile = async () => {
+    try {
+      const result = await dispatch(updateProfile(profile));
+
+      if (updateProfile.fulfilled.match(result)) {
+        await dispatch(getProfile());
+
+        navigation.goBack();
+      } else {
+        console.log(result.payload);
+      }
+    } catch (error) {
+      console.log(error);
+    }
   };
 
-  // ─── SAVE / CREATE Profile ──────────────────────────────────────────────────
+  /*
+  |--------------------------------------------------------------------------
+  | Save Button
+  |--------------------------------------------------------------------------
+  */
+
   const handleSave = async () => {
     try {
       setSaving(true);
-      console.log("─────────────────────────────────────");
 
       if (isCreated) {
-        // ── UPDATE ──
-        console.log("📡 [UPDATE PROFILE] Calling API...");
-        console.log("   Endpoint: PUT /api/players/me");
-        console.log("   Payload:", JSON.stringify(profile, null, 2));
-
-        const result = await dispatch(updateProfile(profile));
-
-        if (updateProfile.fulfilled.match(result)) {
-          console.log("✅ [UPDATE PROFILE] Success");
-          console.log("   Updated Data:", JSON.stringify(result.payload?.data, null, 2));
-          console.log("─────────────────────────────────────");
-          navigation.goBack();
-        } else {
-          console.log("❌ [UPDATE PROFILE] Failed");
-          console.log("   Error:", JSON.stringify(result.payload, null, 2));
-          console.log("─────────────────────────────────────");
-        }
-
+        await updateExistingProfile();
       } else {
-        // ── CREATE ──
-        const payload = {
-          ...profile,
-          playerName: profile.playerName || profile.fullName || "",
-        };
-
-        console.log("📡 [CREATE PROFILE] Calling API...");
-        console.log("   Endpoint: POST /api/players");
-        console.log("   Payload:", JSON.stringify(payload, null, 2));
-
-        const result = await dispatch(createPlayerProfile(payload));
-
-        if (createPlayerProfile.fulfilled.match(result)) {
-          console.log("✅ [CREATE PROFILE] Success");
-          console.log("   Created Data:", JSON.stringify(result.payload?.data, null, 2));
-          console.log("─────────────────────────────────────");
-          navigation.goBack();
-        } else {
-          console.log("❌ [CREATE PROFILE] Failed");
-          console.log("   Error:", JSON.stringify(result.payload, null, 2));
-          console.log("─────────────────────────────────────");
-        }
+        await createProfile();
       }
-
+      navigation.replace("ProfileScreen");
     } catch (error) {
-      console.log("💥 [SAVE PROFILE] Exception:", error.message);
-      console.log("─────────────────────────────────────");
+      console.log(error);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleRemoveProfileImage = () => {
+    updateField("profileImage", {
+      url: "",
+      publicId: "",
+    });
   };
 
   if (fetching) {
@@ -133,24 +284,45 @@ export default function EditProfileScreen() {
     );
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Render
+  |--------------------------------------------------------------------------
+  */
+
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
       >
+        {/* ---------------------------------------------------------------- */}
+        {/* Profile Hero */}
+        {/* ---------------------------------------------------------------- */}
+
         <ProfileHeroCard
           profile={profile}
           isEditMode
           updateField={updateField}
+          uploading={uploading}
+          onUploadProfileImage={handleProfileImage}
+          onRemoveProfileImage={handleRemoveProfileImage}
         />
-        <Text style={{ fontSize: 18, fontWeight: "600", marginHorizontal: 16, marginTop: 16 }}>Edit Profile Screen 11</Text>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Personal Information */}
+        {/* ---------------------------------------------------------------- */}
+
         <PersonalInfoSection
           profile={profile}
           isEditMode
           updateField={updateField}
         />
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Cricket Information */}
+        {/* ---------------------------------------------------------------- */}
 
         <CricketInfoSection
           profile={profile}
@@ -158,11 +330,19 @@ export default function EditProfileScreen() {
           updateField={updateField}
         />
 
+        {/* ---------------------------------------------------------------- */}
+        {/* Favourite */}
+        {/* ---------------------------------------------------------------- */}
+
         <FavoritesSection
           profile={profile}
           isEditMode
           updateField={updateField}
         />
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Highlights */}
+        {/* ---------------------------------------------------------------- */}
 
         <HighlightsSection
           profile={profile}
@@ -170,28 +350,33 @@ export default function EditProfileScreen() {
           updateField={updateField}
         />
 
+        {/* ---------------------------------------------------------------- */}
+        {/* Gallery */}
+        {/* ---------------------------------------------------------------- */}
+
         <GallerySection
           profile={profile}
           isEditMode
           updateField={updateField}
-          onAddImage={() => console.log("Add image pressed")}
-          onAddVideo={() => console.log("Add video pressed")}
+          onAddImage={handleGalleryImage}
+          onAddVideo={handleGalleryVideo}
         />
 
-        <View style={styles.bottomSave}>
-          <TouchableOpacity
-            style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+        {/* ---------------------------------------------------------------- */}
+
+        {/* ---------------------------------------------------------------- */}
+
+        <View style={styles.buttonContainer}>
+          <PrimaryButton
+            title={
+              saving
+                ? "Saving..."
+                : isCreated
+                  ? "Save Changes"
+                  : "Create Profile"
+            }
             onPress={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color={COLORS.onPrimary} />
-            ) : (
-              <Text style={styles.saveBtnText}>
-                {isCreated ? "Save Changes ✓" : "Create Profile ✓"}
-              </Text>
-            )}
-          </TouchableOpacity>
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -199,38 +384,31 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
+  container: {
     flex: 1,
+
     backgroundColor: COLORS.background,
   },
+
   loadingContainer: {
     flex: 1,
-    alignItems: "center",
+
     justifyContent: "center",
+
+    alignItems: "center",
+
     backgroundColor: COLORS.background,
   },
-  scroll: {
-    paddingBottom: 40,
+
+  content: {
+    paddingBottom: 50,
   },
-  bottomSave: {
+
+  buttonContainer: {
     marginHorizontal: 16,
-    marginTop: 8,
-  },
-  saveBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 3,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  saveBtnText: {
-    color: COLORS.onPrimary,
-    fontSize: 17,
-    fontWeight: "700",
+
+    marginTop: 20,
+
+    marginBottom: 40,
   },
 });

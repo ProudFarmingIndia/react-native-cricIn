@@ -1,111 +1,198 @@
 import React from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-} from "react-native";
-import { SectionCard } from "./FormComponents";
+  SectionCard,
+  InputField,
+} from "../../../components/common/FormComponents";
 import { COLORS } from "../../../constants/colors";
 
 export default function HighlightsSection({
-  profile,
+  profile = {},
   isEditMode,
   updateField,
 }) {
-  // highlights is stored as string[] in profile.
-  // In edit mode we join with newlines for the multiline TextInput,
-  // and split back on change — keeping updateField in sync.
+  const highlights = profile.highlights || [];
 
-  const textValue = Array.isArray(profile.highlights)
-    ? profile.highlights.join("\n")
-    : profile.highlights || "";
+  const achievements = profile.achievements || [];
 
-  const handleChange = (text) => {
-    // Store as array, filtering empty lines
-    const arr = text.split("\n").filter((line) => line.trim().length > 0 || text.endsWith("\n"));
-    // Keep raw split so user can type freely; trim on save
-    updateField("highlights", text.split("\n"));
+  const addHighlight = () => {
+    updateField("highlights", [...highlights, ""]);
   };
 
-  if (isEditMode) {
-    return (
-      <SectionCard icon="🏆" title="Highlights">
-        <Text style={styles.hint}>
-          Enter each achievement on a new line
-        </Text>
-        <TextInput
-          value={textValue}
-          onChangeText={handleChange}
-          placeholder={"e.g. Scored 150 in state finals\nBest bowler 2023 tournament"}
-          placeholderTextColor={COLORS.outline}
-          multiline
-          numberOfLines={5}
-          style={styles.input}
-        />
-      </SectionCard>
-    );
-  }
+  const addAchievement = () => {
+    updateField("achievements", [...achievements, ""]);
+  };
 
-  // View mode
-  const items = Array.isArray(profile.highlights)
-    ? profile.highlights.filter(Boolean)
-    : [];
+  const updateHighlight = (index, value) => {
+    const updated = [...highlights];
+
+    updated[index] = value;
+
+    updateField("highlights", updated);
+  };
+
+  const updateAchievement = (index, value) => {
+    const updated = [...achievements];
+
+    updated[index] = value;
+
+    updateField("achievements", updated);
+  };
+
+  const removeHighlight = (index) => {
+    updateField(
+      "highlights",
+      highlights.filter((_, i) => i !== index),
+    );
+  };
+
+  const removeAchievement = (index) => {
+    updateField(
+      "achievements",
+      achievements.filter((_, i) => i !== index),
+    );
+  };
 
   return (
-    <SectionCard icon="🏆" title="Highlights">
-      {items.length === 0 ? (
-        <Text style={styles.empty}>No highlights added yet.</Text>
-      ) : (
-        items.map((item, index) => (
-          <View key={index} style={styles.item}>
-            <Text style={styles.bullet}>•</Text>
-            <Text style={styles.itemText}>{item}</Text>
+    <SectionCard icon="🏆" title="Highlights & Achievements">
+      <Text style={styles.heading}>Highlights</Text>
+
+      {highlights.map((item, index) => (
+        <View key={index} style={styles.row}>
+          <View style={styles.achieve}>
+            <InputField
+              placeholder={`Highlight ${index + 1}`}
+              value={item}
+              onChangeText={(text) => updateHighlight(index, text)}
+            />
           </View>
-        ))
+
+          {isEditMode && (
+            <TouchableOpacity
+              onPress={() => removeHighlight(index)}
+              style={styles.deleteBtn}
+            >
+              <Text style={styles.deleteText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ))}
+
+      {isEditMode && (
+        <TouchableOpacity style={styles.addBtn} onPress={addHighlight}>
+          <Text style={styles.addText}>+ Add Highlight</Text>
+        </TouchableOpacity>
+      )}
+
+      <Text style={[styles.heading, styles.highLight]}>Achievements</Text>
+
+      {achievements.map((item, index) => (
+        <View key={index} style={styles.row}>
+          <View style={styles.achieve}>
+            <InputField
+              placeholder={`Achievement ${index + 1}`}
+              value={item}
+              onChangeText={(text) => updateAchievement(index, text)}
+            />
+          </View>
+
+          {isEditMode && (
+            <TouchableOpacity
+              onPress={() => removeAchievement(index)}
+              style={styles.deleteBtn}
+            >
+              <Text style={styles.deleteText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ))}
+
+      {isEditMode && (
+        <TouchableOpacity style={styles.addBtn} onPress={addAchievement}>
+          <Text style={styles.addText}>+ Add Achievement</Text>
+        </TouchableOpacity>
+      )}
+
+      {!isEditMode && highlights.length === 0 && achievements.length === 0 && (
+        <Text style={styles.empty}>No Highlights Yet</Text>
       )}
     </SectionCard>
   );
 }
 
 const styles = StyleSheet.create({
-  hint: {
-    fontSize: 12,
-    color: COLORS.outline,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  heading: {
     fontSize: 15,
-    color: COLORS.onSurface,
-    minHeight: 110,
-    textAlignVertical: "top",
-  },
-  item: {
-    flexDirection: "row",
-    gap: 8,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.outlineVariant,
-  },
-  bullet: {
-    fontSize: 14,
+
+    fontWeight: "700",
+
     color: COLORS.primary,
+
+    marginBottom: 10,
+  },
+
+  row: {
+    flexDirection: "row",
+
+    alignItems: "center",
+  },
+
+  deleteBtn: {
+    marginLeft: 10,
+
+    width: 38,
+
+    height: 38,
+
+    borderRadius: 19,
+
+    backgroundColor: "#ff4d4f",
+
+    justifyContent: "center",
+
+    alignItems: "center",
+  },
+
+  deleteText: {
+    color: "#fff",
+
+    fontSize: 18,
+
     fontWeight: "700",
   },
-  itemText: {
-    fontSize: 14,
-    color: COLORS.onSurface,
-    flex: 1,
-    lineHeight: 20,
-  },
-  empty: {
-    fontSize: 14,
-    color: COLORS.outline,
-    textAlign: "center",
+
+  addBtn: {
+    marginTop: 5,
+
     paddingVertical: 12,
+
+    alignItems: "center",
+
+    borderRadius: 10,
+
+    borderWidth: 1,
+
+    borderColor: COLORS.primary,
+  },
+
+  addText: {
+    color: COLORS.primary,
+
+    fontWeight: "700",
+  },
+
+  empty: {
+    textAlign: "center",
+
+    marginVertical: 20,
+
+    color: COLORS.onSurfaceVariant,
+  },
+
+  highLight: {
+    marginTop: 20,
+  },
+  achieve: {
+    flex: 1,
   },
 });

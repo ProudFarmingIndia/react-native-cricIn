@@ -2,7 +2,6 @@ export const COLORS = {
   primary: "#00490e",
   primaryContainer: "#0d631b",
   onPrimary: "#ffffff",
-  onPrimaryContainer: "#8bdd86",
   secondary: "#8f4e00",
   secondaryContainer: "#ff8f04",
   onSecondary: "#ffffff",
@@ -18,4 +17,9 @@ export const COLORS = {
   outlineVariant: "#bfcaba",
   outline: "#707a6c",
   error: "#ba1a1a",
+  onError: "#ffffff",
+  success: "#2e7d32",
+  onSuccess: "#ffffff",
+  warning: "#ff8f04",
+  onWarning: "#ffffff",
 };

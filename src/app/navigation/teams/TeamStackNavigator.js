@@ -1,26 +1,19 @@
 import React from "react";
 
-import {
-  createNativeStackNavigator,
-} from "@react-navigation/native-stack";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import NavigationHeader from "../../../components/common/NavigationHeader";
+import CreateTeamScreen from "../../../features/teams/screens/CreateTeamScreen";
 
-import CreateTeamScreen
-from "../../../features/teams/screens/CreateTeamScreen";
-
-const Stack =
-  createNativeStackNavigator();
+const Stack = createNativeStackNavigator();
 
 export default function TeamStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerShown: false,
+        header: ({ route }) => <NavigationHeader route={route} />,
       }}
     >
-      <Stack.Screen
-        name="CreateTeamScreen"
-        component={CreateTeamScreen}
-      />
+      <Stack.Screen name="CreateTeamScreen" component={CreateTeamScreen} />
     </Stack.Navigator>
   );
 }

@@ -1,77 +1,69 @@
 import React from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
 
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { SafeAreaView }
+from "react-native-safe-area-context";
 
-import { MaterialIcons } from "@expo/vector-icons";
+import Ionicons
+from "@expo/vector-icons/Ionicons";
 
-import { useNavigation } from "@react-navigation/native";
-
-import { COLORS } from "../../constants/colors";
-
-export default function AppHeader({ title, showBack = false }) {
-  const navigation = useNavigation();
-
+export default function AppHeader({
+  title,
+  showBack,
+  navigation,
+}) {
   return (
-    <View style={styles.container}>
-      {/* LEFT */}
-
-      <View style={styles.leftSection}>
-        {showBack && (
+    <SafeAreaView
+      edges={["top"]}
+      style={styles.safe}
+    >
+      <View style={styles.header}>
+        {showBack ? (
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <MaterialIcons
-              name="arrow-back-ios"
-              size={22}
-              color={COLORS.text}
+            <Ionicons
+              name="arrow-back"
+              size={24}
             />
           </TouchableOpacity>
+        ) : (
+          <View
+            style={{ width: 24 }}
+          />
         )}
 
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.title}>
+          {title}
+        </Text>
+
+        <View
+          style={{ width: 24 }}
+        />
       </View>
-
-      {/* RIGHT */}
-
-      <View style={styles.rightSection}>
-        <TouchableOpacity>
-          <MaterialIcons name="search" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={{ marginLeft: 16 }}>
-          <MaterialIcons
-            name="notifications-none"
-            size={24}
-            color={COLORS.text}
-          />
-        </TouchableOpacity>
-      </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    height: 60,
-    backgroundColor: COLORS.background,
+  safe: {
+    backgroundColor: "#fff",
+  },
+
+  header: {
+    height: 56,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:"space-between",
     paddingHorizontal: 16,
-  },
-
-  leftSection: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  rightSection: {
-    flexDirection: "row",
-    alignItems: "center",
+    backgroundColor: "#fff",
   },
 
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
-    color: COLORS.text,
-    marginLeft: 4,
   },
 });

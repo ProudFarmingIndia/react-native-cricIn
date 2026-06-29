@@ -1,26 +1,20 @@
 import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import HomeScreen from "../../../features/home/screens/HomeScreen";
+import NavigationHeader from "../../../components/common/NavigationHeader";
+const Stack = createNativeStackNavigator();
 
-import {
-  createNativeStackNavigator,
-} from "@react-navigation/native-stack";
-
-import HomeScreen
-from "../../../features/home/screens/HomeScreen";
-
-const Stack =
-  createNativeStackNavigator();
-
+const renderHeader = ({ route }) => {
+  return <NavigationHeader route={route} />;
+};
 export default function HomeStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerShown: false,
+        header: renderHeader,
       }}
     >
-      <Stack.Screen
-        name="HomeScreen"
-        component={HomeScreen}
-      />
+      <Stack.Screen name="HomeScreen" component={HomeScreen} />
     </Stack.Navigator>
   );
 }

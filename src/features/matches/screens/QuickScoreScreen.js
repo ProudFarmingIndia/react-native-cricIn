@@ -5,11 +5,11 @@ import {
   StyleSheet,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import MatchInfoSection from "../../../components/matches/QuickScoreScreen/MatchInfoSection";
-import TeamSelectionSection from "../../../components/matches/QuickScoreScreen/TeamSelectionSection";
-import MatchSpecificationSection from "../../../components/matches/QuickScoreScreen/MatchSpecificationSection";
-import GroundSelectionSection from "../../../components/matches/QuickScoreScreen/GroundSelectionSection";
-import BottomAction from "../../../components/matches/QuickScoreScreen/BottomAction";
+import MatchInfoSection from "../components/MatchInfoSection";
+import TeamSelectionSection from "../components/TeamSelectionSection";
+import MatchSpecificationSection from "../components/MatchSpecificationSection";
+import GroundSelectionSection from "../components/GroundSelectionSection";
+import BottomAction from "../components/BottomAction";
 import { COLORS } from "../../../constants/colors";
 
 export default function QuickScoreScreen() {

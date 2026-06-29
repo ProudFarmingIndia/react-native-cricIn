@@ -1,152 +1,3 @@
-// import React from "react";
-// import {
-//   View,
-//   Text,
-//   Image,
-//   TouchableOpacity,
-//   StyleSheet,
-// } from "react-native";
-// import { COLORS } from "../../../constants/colors";
-
-// export default function ProfileHeroCard({
-//   profile = {},
-//   isEditMode = false,
-//   updateField,
-//   onEditPress,
-// }) {
-//   return (
-//     <View style={styles.container}>
-//       {/* Avatar */}
-//       <View style={styles.avatarWrapper}>
-//         <Image
-//           source={{
-//             uri: profile.profileImage || "https://i.pravatar.cc/300",
-//           }}
-//           style={styles.avatar}
-//         />
-//         {isEditMode && (
-//           <TouchableOpacity
-//             style={styles.editPhotoBtn}
-//             onPress={onEditPress}
-//           >
-//             <Text style={styles.editPhotoIcon}>✎</Text>
-//           </TouchableOpacity>
-//         )}
-//       </View>
-
-//       <Text style={styles.name}>
-//         {profile.fullName || "Your Name"}
-//       </Text>
-
-//       {!isEditMode && (
-//         <>
-//           <Text style={styles.role}>{profile.playerRole}</Text>
-
-//           <View style={styles.statsRow}>
-//             <View style={styles.statItem}>
-//               <Text style={styles.statNumber}>
-//                 {profile.followers || "0"}
-//               </Text>
-//               <Text style={styles.statLabel}>Followers</Text>
-//             </View>
-//             <View style={styles.statDivider} />
-//             <View style={styles.statItem}>
-//               <Text style={styles.statNumber}>
-//                 {profile.following || "0"}
-//               </Text>
-//               <Text style={styles.statLabel}>Following</Text>
-//             </View>
-//           </View>
-//         </>
-//       )}
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: {
-//     alignItems: "center",
-//     paddingVertical: 24,
-//     paddingHorizontal: 16,
-//     backgroundColor: COLORS.background,
-//   },
-
-//   avatarWrapper: {
-//     position: "relative",
-//     marginBottom: 12,
-//   },
-
-//   avatar: {
-//     width: 120,
-//     height: 120,
-//     borderRadius: 60,
-//     borderWidth: 4,
-//     borderColor: COLORS.surfaceContainerHighest,
-//   },
-
-//   editPhotoBtn: {
-//     position: "absolute",
-//     bottom: 2,
-//     right: 2,
-//     width: 36,
-//     height: 36,
-//     borderRadius: 18,
-//     backgroundColor: COLORS.secondary,
-//     alignItems: "center",
-//     justifyContent: "center",
-//     elevation: 4,
-//     shadowColor: "#000",
-//     shadowOpacity: 0.2,
-//     shadowRadius: 4,
-//     shadowOffset: { width: 0, height: 2 },
-//   },
-
-//   editPhotoIcon: {
-//     color: COLORS.onPrimary,
-//     fontSize: 16,
-//   },
-
-//   name: {
-//     fontSize: 20,
-//     fontWeight: "700",
-//     color: COLORS.onSurface,
-//   },
-
-//   role: {
-//     fontSize: 14,
-//     color: COLORS.onSurfaceVariant,
-//     marginTop: 4,
-//   },
-
-//   statsRow: {
-//     flexDirection: "row",
-//     alignItems: "center",
-//     marginTop: 20,
-//     gap: 32,
-//   },
-
-//   statItem: {
-//     alignItems: "center",
-//   },
-
-//   statNumber: {
-//     fontSize: 20,
-//     fontWeight: "700",
-//     color: COLORS.onSurface,
-//   },
-
-//   statLabel: {
-//     fontSize: 13,
-//     color: COLORS.onSurfaceVariant,
-//     marginTop: 2,
-//   },
-
-//   statDivider: {
-//     width: 1,
-//     height: 32,
-//     backgroundColor: COLORS.outlineVariant,
-//   },
-// });
 import React from "react";
 import {
   View,
@@ -154,62 +5,102 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { COLORS } from "../../../constants/colors";
 
 export default function ProfileHeroCard({
   profile = {},
   isEditMode = false,
+
+  uploading = false,
+
   updateField,
+
+  onUploadProfileImage,
+  onRemoveProfileImage,
+
   onEditPress,
 }) {
+  const profileImage =
+    profile?.profileImage?.url || "https://i.pravatar.cc/300";
+
   return (
     <View style={styles.container}>
       {/* Avatar */}
       <View style={styles.avatarWrapper}>
         <Image
           source={{
-            uri: profile.profileImage || "https://i.pravatar.cc/300",
+            uri: profileImage,
           }}
           style={styles.avatar}
         />
+
+        {uploading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="small" color="#fff" />
+          </View>
+        )}
+
         {isEditMode && (
-          <TouchableOpacity
-            style={styles.editPhotoBtn}
-            onPress={onEditPress}
-          >
-            <Text style={styles.editPhotoIcon}>✎</Text>
-          </TouchableOpacity>
+          <>
+            {/* Upload */}
+            <TouchableOpacity
+              style={styles.editPhotoBtn}
+              onPress={onUploadProfileImage}
+            >
+              <Text style={styles.editPhotoIcon}>📷</Text>
+            </TouchableOpacity>
+
+            {/* Remove */}
+            {profile?.profileImage?.url ? (
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={onRemoveProfileImage}
+              >
+                <Text style={styles.removeText}>✕</Text>
+              </TouchableOpacity>
+            ) : null}
+          </>
         )}
       </View>
 
-      <Text style={styles.name}>
-        {profile.fullName || "Your Name"}
-      </Text>
+      {isEditMode ? (
+        <TextInput
+          style={styles.nameInput}
+          placeholder="Player Name"
+          value={profile?.playerName}
+          onChangeText={(text) => updateField("playerName", text)}
+        />
+      ) : (
+        <Text style={styles.name}>{profile?.playerName || "Player Name"}</Text>
+      )}
 
+      {/* Player Type */}
+      <Text style={styles.role}>{profile?.playerType || "Player"}</Text>
+
+      {/* Followers */}
       {!isEditMode && (
         <>
-          <Text style={styles.role}>{profile.playerRole}</Text>
-
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {profile.followers || "0"}
-              </Text>
+              <Text style={styles.statNumber}>{profile?.followers || 0}</Text>
+
               <Text style={styles.statLabel}>Followers</Text>
             </View>
-            <View style={styles.statDivider} />
+
+            <View style={styles.divider} />
+
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {profile.following || "0"}
-              </Text>
+              <Text style={styles.statNumber}>{profile?.following || 0}</Text>
+
               <Text style={styles.statLabel}>Following</Text>
             </View>
           </View>
 
-          {/* Edit Profile button — navigates to EditProfileScreen */}
-          <TouchableOpacity style={styles.editBtn} onPress={onEditPress}>
-            <Text style={styles.editBtnText}>Edit Profile</Text>
+          <TouchableOpacity style={styles.editButton} onPress={onEditPress}>
+            <Text style={styles.editButtonText}>Edit Profile</Text>
           </TouchableOpacity>
         </>
       )}
@@ -220,67 +111,105 @@ export default function ProfileHeroCard({
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+    paddingVertical: 25,
+    paddingHorizontal: 20,
     backgroundColor: COLORS.background,
   },
 
   avatarWrapper: {
     position: "relative",
-    marginBottom: 12,
+    marginBottom: 16,
   },
 
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
     borderWidth: 4,
     borderColor: COLORS.surfaceContainerHighest,
   },
 
+  loadingOverlay: {
+    position: "absolute",
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
   editPhotoBtn: {
     position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.secondary,
-    alignItems: "center",
+    bottom: 0,
+    right: 0,
+
+    width: 40,
+    height: 40,
+
+    borderRadius: 20,
+
+    backgroundColor: COLORS.primary,
+
     justifyContent: "center",
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    alignItems: "center",
+
+    elevation: 5,
   },
 
   editPhotoIcon: {
-    color: COLORS.onPrimary,
-    fontSize: 16,
+    fontSize: 18,
+  },
+
+  removeBtn: {
+    position: "absolute",
+
+    top: 0,
+    left: 0,
+
+    width: 30,
+    height: 30,
+
+    borderRadius: 15,
+
+    backgroundColor: "#E53935",
+
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  removeText: {
+    color: "#fff",
+    fontWeight: "700",
   },
 
   name: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "700",
     color: COLORS.onSurface,
   },
 
   role: {
-    fontSize: 14,
+    marginTop: 5,
+    fontSize: 15,
     color: COLORS.onSurfaceVariant,
-    marginTop: 4,
   },
 
   statsRow: {
     flexDirection: "row",
+    marginTop: 24,
     alignItems: "center",
-    marginTop: 20,
-    gap: 32,
   },
 
   statItem: {
     alignItems: "center",
+    paddingHorizontal: 30,
+  },
+
+  divider: {
+    width: 1,
+    height: 35,
+    backgroundColor: COLORS.outlineVariant,
   },
 
   statNumber: {
@@ -290,28 +219,32 @@ const styles = StyleSheet.create({
   },
 
   statLabel: {
-    fontSize: 13,
+    marginTop: 4,
     color: COLORS.onSurfaceVariant,
-    marginTop: 2,
+    fontSize: 12,
   },
 
-  statDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: COLORS.outlineVariant,
-  },
-
-  editBtn: {
-    marginTop: 20,
+  editButton: {
+    marginTop: 22,
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 32,
+    paddingHorizontal: 30,
     paddingVertical: 12,
-    borderRadius: 999,
+    borderRadius: 30,
   },
 
-  editBtnText: {
+  editButtonText: {
     color: COLORS.onPrimary,
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: 15,
+  },
+  nameInput: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.onSurface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.outlineVariant,
+    minWidth: 220,
+    textAlign: "center",
+    paddingVertical: 4,
   },
 });

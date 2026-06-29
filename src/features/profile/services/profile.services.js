@@ -1,36 +1,3 @@
-// import apiClient from "../../../services/api/apiClient";
-// import { ENDPOINTS } from "../../../services/api/endpoints";
-
-// export const getProfileApi = () => {
-//   return apiClient.get(
-//     ENDPOINTS.PROFILE.GET_PROFILE
-//   );
-// };
-
-// export const updateProfileApi = (
-//   payload
-// ) => {
-//   return apiClient.put(
-//     ENDPOINTS.PROFILE.UPDATE_PROFILE,
-//     payload
-//   );
-// };
-
-// // export const uploadProfileImageApi = (
-// //   formData
-// // ) => {
-// //   return apiClient.post(
-// //     ENDPOINTS.PROFILE.UPLOAD_PROFILE_IMAGE,
-// //     formData,
-// //     {
-// //       headers: {
-// //         "Content-Type":
-// //           "multipart/form-data",
-// //       },
-// //     }
-// //   );
-// // };
-
 import apiClient from "../../../services/api/apiClient";
 import { ENDPOINTS } from "../../../services/api/endpoints";
 

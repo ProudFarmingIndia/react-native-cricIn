@@ -1,79 +1,101 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { SectionCard, InputField } from "./FormComponents";
-import { COLORS } from "../../../constants/colors";
+import {
+  SectionCard,
+  InputField,
+  SelectField,
+} from "../../../components/common/FormComponents";
+import InfoRow from "../../../cards/InfoRow";
+import favoriteShots from "../../../constants/dropdowns/favoriteShots";
+import favoriteBalls from "../../../constants/dropdowns/favoriteBalls";
 
 export default function FavoritesSection({
-  profile,
+  profile = {},
   isEditMode,
   updateField,
 }) {
   if (isEditMode) {
     return (
-      <SectionCard icon="⭐" title="Favorites">
+      <SectionCard
+        icon="⭐"
+        title="Favorites"
+      >
         <InputField
           label="Favorite Cricketer"
+          placeholder="Virat Kohli"
           value={profile.favoriteCricketer}
-          onChangeText={(t) => updateField("favoriteCricketer", t)}
-          placeholder="e.g. Virat Kohli"
+          onChangeText={(text) =>
+            updateField(
+              "favoriteCricketer",
+              text
+            )
+          }
         />
 
         <InputField
           label="Favorite Team"
+          placeholder="India"
           value={profile.favoriteTeam}
-          onChangeText={(t) => updateField("favoriteTeam", t)}
-          placeholder="e.g. India"
+          onChangeText={(text) =>
+            updateField(
+              "favoriteTeam",
+              text
+            )
+          }
         />
 
-        <InputField
+        <SelectField
           label="Favorite Shot"
           value={profile.favoriteShot}
-          onChangeText={(t) => updateField("favoriteShot", t)}
-          placeholder="e.g. Cover Drive"
+          options={favoriteShots}
+          placeholder="Select Favorite Shot"
+          onSelect={(value) =>
+            updateField(
+              "favoriteShot",
+              value
+            )
+          }
+        />
+
+        <SelectField
+          label="Favorite Ball"
+          value={profile.favoriteBall}
+          options={favoriteBalls}
+          placeholder="Select Favorite Ball"
+          onSelect={(value) =>
+            updateField(
+              "favoriteBall",
+              value
+            )
+          }
         />
       </SectionCard>
     );
   }
 
-  // View mode
   return (
-    <SectionCard icon="⭐" title="Favorites">
-      {[
-        ["Cricketer", profile.favoriteCricketer],
-        ["Team", profile.favoriteTeam],
-        ["Shot", profile.favoriteShot],
-      ].map(([label, val]) =>
-        val ? <InfoRow key={label} label={label} value={val} /> : null
-      )}
+    <SectionCard
+      icon="⭐"
+      title="Favorites"
+    >
+      <InfoRow
+        label="Favorite Cricketer"
+        value={profile.favoriteCricketer}
+      />
+
+      <InfoRow
+        label="Favorite Team"
+        value={profile.favoriteTeam}
+      />
+
+      <InfoRow
+        label="Favorite Shot"
+        value={profile.favoriteShot}
+      />
+
+      <InfoRow
+        label="Favorite Ball"
+        value={profile.favoriteBall}
+      />
     </SectionCard>
   );
 }
-
-function InfoRow({ label, value }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.outlineVariant,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.onSurfaceVariant,
-  },
-  value: {
-    fontSize: 14,
-    color: COLORS.onSurface,
-    fontWeight: "500",
-  },
-});

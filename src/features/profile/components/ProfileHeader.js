@@ -42,7 +42,7 @@ export default function ProfileHeader({
           )}
         </TouchableOpacity>
       ) : (
-        <View style={{ width: 64 }} />
+        <View style={styles.viewLast} />
       )}
     </View>
   );
@@ -100,4 +100,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 14,
   },
+  viewLast: {
+    width : 64
+  }
 });

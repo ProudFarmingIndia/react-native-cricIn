@@ -1,134 +1,129 @@
 import React from "react";
-import { View, Text } from "react-native";
-import { SectionCard, InputField, SelectField } from "./FormComponents";
+import { View, Text, StyleSheet } from "react-native";
+import {
+  SectionCard,
+  InputField,
+  SelectField,
+} from "./../../../components/common/FormComponents";
+import InfoRow from "../../../cards/InfoRow";
 import { COLORS } from "../../../constants/colors";
+import DatePickerField from "../../../components/common/DatePickerField";
 
 const GENDER_OPTIONS = [
-  { label: "Male", value: "male" },
-  { label: "Female", value: "female" },
-  { label: "Other", value: "other" },
+  {
+    label: "Male",
+    value: "Male",
+  },
+  {
+    label: "Female",
+    value: "Female",
+  },
+  {
+    label: "Other",
+    value: "Other",
+  },
 ];
 
 export default function PersonalInfoSection({
-  profile,
-  isEditMode,
+  profile = {},
+  isEditMode = false,
   updateField,
 }) {
   if (isEditMode) {
     return (
-      <SectionCard icon="👤" title="Personal Info">
+      <SectionCard icon="👤" title="Personal Information">
         <InputField
-          label="Full Name"
-          value={profile.fullName}
-          onChangeText={(t) => updateField("fullName", t)}
-          placeholder="Enter your full name"
-        />
-
-        <InputField
-          label="Date of Birth"
-          value={profile.dateOfBirth}
-          onChangeText={(t) => updateField("dateOfBirth", t)}
-          placeholder="YYYY-MM-DD"
+          label="Player Name"
+          placeholder="Enter Player Name"
+          value={profile.playerName}
+          onChangeText={(text) => updateField("playerName", text)}
         />
 
         <InputField
           label="Bio"
+          placeholder="Tell everyone about yourself..."
           value={profile.bio}
-          onChangeText={(t) => updateField("bio", t)}
-          placeholder="Tell us about your cricketing journey..."
           multiline
+          onChangeText={(text) => updateField("bio", text)}
+        />
+
+        <DatePickerField
+          label="Date of Birth"
+          value={profile.dob}
+          onChange={(date) => updateField("dob", date)}
         />
 
         <SelectField
           label="Gender"
           value={profile.gender}
           options={GENDER_OPTIONS}
-          onSelect={(v) => updateField("gender", v)}
+          onSelect={(value) => updateField("gender", value)}
         />
 
         <InputField
           label="City"
-          value={profile.city}
-          onChangeText={(t) => updateField("city", t)}
           placeholder="City"
+          value={profile.city}
+          onChangeText={(text) => updateField("city", text)}
         />
 
         <InputField
           label="State"
-          value={profile.state}
-          onChangeText={(t) => updateField("state", t)}
           placeholder="State"
+          value={profile.state}
+          onChangeText={(text) => updateField("state", text)}
         />
 
         <InputField
           label="Country"
-          value={profile.country}
-          onChangeText={(t) => updateField("country", t)}
           placeholder="Country"
+          value={profile.country}
+          onChangeText={(text) => updateField("country", text)}
         />
       </SectionCard>
     );
   }
 
-  // View mode
   return (
-    <SectionCard icon="👤" title="Personal Info">
-      {[
-        ["Full Name", profile.fullName],
-        ["Date of Birth", profile.dateOfBirth],
-        ["Gender", profile.gender],
-        ["City", profile.city],
-        ["State", profile.state],
-        ["Country", profile.country],
-      ].map(([label, val]) =>
-        val ? (
-          <InfoRow key={label} label={label} value={val} />
-        ) : null
-      )}
-      {profile.bio ? (
-        <View style={{ marginTop: 8 }}>
-          <Text style={rowStyles.label}>Bio</Text>
-          <Text style={rowStyles.bio}>{profile.bio}</Text>
+    <SectionCard icon="👤" title="Personal Information">
+      <InfoRow label="Player Name" value={profile.playerName} />
+
+      <InfoRow label="Date of Birth" value={profile.dob} />
+
+      <InfoRow label="Gender" value={profile.gender} />
+
+      <InfoRow label="City" value={profile.city} />
+
+      <InfoRow label="State" value={profile.state} />
+
+      <InfoRow label="Country" value={profile.country} />
+
+      {!!profile.bio && (
+        <View style={styles.bioContainer}>
+          <Text style={styles.bioLabel}>Bio</Text>
+
+          <Text style={styles.bio}>{profile.bio}</Text>
         </View>
-      ) : null}
+      )}
     </SectionCard>
   );
 }
 
-function InfoRow({ label, value }) {
-  return (
-    <View style={rowStyles.row}>
-      <Text style={rowStyles.label}>{label}</Text>
-      <Text style={rowStyles.value}>{value}</Text>
-    </View>
-  );
-}
+const styles = StyleSheet.create({
+  bioContainer: {
+    marginTop: 16,
+  },
 
-import { StyleSheet } from "react-native";
-const rowStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.outlineVariant,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.onSurfaceVariant,
-  },
-  value: {
+  bioLabel: {
     fontSize: 14,
+    fontWeight: "700",
     color: COLORS.onSurface,
-    fontWeight: "500",
-    flexShrink: 1,
-    textAlign: "right",
   },
+
   bio: {
+    marginTop: 8,
+    color: COLORS.onSurfaceVariant,
+    lineHeight: 22,
     fontSize: 14,
-    color: COLORS.onSurface,
-    lineHeight: 20,
-    marginTop: 4,
   },
 });

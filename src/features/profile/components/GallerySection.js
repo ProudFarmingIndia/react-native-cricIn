@@ -3,230 +3,281 @@ import {
   View,
   Text,
   Image,
-  ScrollView,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
-  Dimensions,
+  ActivityIndicator,
 } from "react-native";
-import { SectionCard } from "./FormComponents";
+
+import { SectionCard } from "../../../components/common/FormComponents";
+
+import useUpload from "../../upload/hooks/useUpload";
+
 import { COLORS } from "../../../constants/colors";
 
-const CELL_SIZE = (Dimensions.get("window").width - 32 - 40 - 16 * 2) / 3;
+export default function GallerySection({ profile = {}, updateField, isEditMode }) {
+  const { uploading, pickImage, pickVideo } = useUpload();
 
-export default function GallerySection({
-  profile,
-  isEditMode,
-  updateField,
-  onAddImage,
-  onDeleteImage,
-  onAddVideo,
-}) {
-  const images = profile.galleryImages || [];
-  const videos = profile.galleryVideos || [];
+  const gallery = profile.gallery || [];
+
+  const images = gallery.filter((item) => item.type === "IMAGE");
+
+  const videos = gallery.filter((item) => item.type === "VIDEO");
+
+  /////////////////////////////////////////////////////
+
+  const addImage = async () => {
+    const uploaded = await pickImage("players/gallery");
+
+    if (!uploaded) return;
+
+    updateField("gallery", [
+      ...gallery,
+      {
+        type: "IMAGE",
+
+        url: uploaded.url,
+
+        publicId: uploaded.publicId,
+
+        uploadedAt: new Date(),
+      },
+    ]);
+  };
+
+  /////////////////////////////////////////////////////
+
+  const addVideo = async () => {
+    const uploaded = await pickVideo("players/gallery");
+
+    if (!uploaded) return;
+
+    updateField("gallery", [
+      ...gallery,
+      {
+        type: "VIDEO",
+
+        url: uploaded.url,
+
+        publicId: uploaded.publicId,
+
+        uploadedAt: new Date(),
+      },
+    ]);
+  };
+
+  /////////////////////////////////////////////////////
+
+  const deleteMedia = (publicId) => {
+    updateField(
+      "gallery",
+      gallery.filter((item) => item.publicId !== publicId),
+    );
+  };
+
+  /////////////////////////////////////////////////////
 
   return (
-    <SectionCard icon="🖼️" title="Gallery">
-      {/* ── Images ── */}
-      <View style={styles.subHeader}>
-        <Text style={styles.subTitle}>Images</Text>
+    <SectionCard icon="🖼" title="Gallery">
+      {/* Images */}
+
+      <View style={styles.header}>
+        <Text style={styles.heading}>Images</Text>
+
         {isEditMode && (
-          <Text style={styles.hint}>Max 5MB each</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={addImage}>
+            <Text style={styles.addText}>+ Add</Text>
+          </TouchableOpacity>
         )}
       </View>
 
-      <View style={styles.imageGrid}>
-        {/* Add button — edit mode only */}
-        {isEditMode && (
-          <TouchableOpacity
-            style={styles.addCell}
-            onPress={onAddImage}
-          >
-            <Text style={styles.addIcon}>＋</Text>
-          </TouchableOpacity>
-        )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {images.map((item) => (
+          <View key={item.publicId} style={styles.mediaBox}>
+            <Image
+              source={{
+                uri: item.url,
+              }}
+              style={styles.image}
+            />
 
-        {images.map((uri, index) => (
-          <View key={index} style={styles.imageCell}>
-            <Image source={{ uri }} style={styles.image} />
             {isEditMode && (
               <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => {
-                  const updated = images.filter((_, i) => i !== index);
-                  updateField("galleryImages", updated);
-                  onDeleteImage?.(index);
-                }}
+                style={styles.delete}
+                onPress={() => deleteMedia(item.publicId)}
               >
-                <Text style={styles.deleteIcon}>✕</Text>
+                <Text style={styles.deleteText}>✕</Text>
               </TouchableOpacity>
             )}
           </View>
         ))}
 
-        {images.length === 0 && !isEditMode && (
-          <Text style={styles.empty}>No images yet.</Text>
-        )}
-      </View>
+        {images.length === 0 && <Text style={styles.empty}>No Images</Text>}
+      </ScrollView>
 
-      {/* ── Videos ── */}
-      <View style={[styles.subHeader, { marginTop: 16 }]}>
-        <Text style={styles.subTitle}>Videos</Text>
+      {/* Videos */}
+
+      <View
+        style={[
+          styles.header,
+          styles.mrgTwtyFv,
+        ]}
+      >
+        <Text style={styles.heading}>Videos</Text>
+
         {isEditMode && (
-          <Text style={styles.hint}>MP4, MOV · 50MB max</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={addVideo}>
+            <Text style={styles.addText}>+ Add</Text>
+          </TouchableOpacity>
         )}
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {/* Add video button */}
-        {isEditMode && (
-          <TouchableOpacity style={styles.videoAddCell} onPress={onAddVideo}>
-            <Text style={styles.videoAddIcon}>🎬</Text>
-            <Text style={styles.videoAddLabel}>ADD CLIP</Text>
-          </TouchableOpacity>
-        )}
+        {videos.map((item) => (
+          <View key={item.publicId} style={styles.video}>
+            <Text style={styles.videoIcon}>🎥</Text>
 
-        {videos.map((item, index) => (
-          <View key={index} style={styles.videoCell}>
-            <View style={styles.videoOverlay}>
-              <Text style={styles.playIcon}>▶</Text>
-            </View>
-            <Text style={styles.videoName} numberOfLines={1}>
-              {item.name || `VIDEO_${index + 1}`}
+            <Text numberOfLines={1} style={styles.videoText}>
+              Video
             </Text>
+
+            {isEditMode && (
+              <TouchableOpacity
+                style={styles.delete}
+                onPress={() => deleteMedia(item.publicId)}
+              >
+                <Text style={styles.deleteText}>✕</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ))}
 
-        {videos.length === 0 && !isEditMode && (
-          <Text style={styles.empty}>No videos yet.</Text>
-        )}
+        {videos.length === 0 && <Text style={styles.empty}>No Videos</Text>}
       </ScrollView>
+
+      {uploading && (
+        <ActivityIndicator
+          size="large"
+          color={COLORS.primary}
+          style={styles.mrgTwty}
+        />
+      )}
     </SectionCard>
   );
 }
 
 const styles = StyleSheet.create({
-  subHeader: {
+  header: {
     flexDirection: "row",
+
     justifyContent: "space-between",
+
     alignItems: "center",
-    marginBottom: 10,
-  },
-  subTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-  hint: {
-    fontSize: 11,
-    color: COLORS.outline,
+
+    marginBottom: 12,
   },
 
-  // Image grid
-  imageGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  heading: {
+    fontSize: 16,
+
+    fontWeight: "700",
+
+    color: COLORS.onSurface,
   },
-  addCell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    borderColor: COLORS.outlineVariant,
-    backgroundColor: COLORS.surfaceContainer,
-    alignItems: "center",
-    justifyContent: "center",
+
+  addBtn: {
+    paddingHorizontal: 14,
+
+    paddingVertical: 7,
+
+    borderRadius: 8,
+
+    backgroundColor: COLORS.primary,
   },
-  addIcon: {
-    fontSize: 28,
-    color: COLORS.outline,
+
+  addText: {
+    color: "#fff",
+
+    fontWeight: "700",
   },
-  imageCell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: 10,
-    overflow: "hidden",
+
+  mediaBox: {
+    marginRight: 12,
+
     position: "relative",
   },
+
   image: {
-    width: "100%",
-    height: "100%",
-  },
-  deleteBtn: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  deleteIcon: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "700",
+    width: 110,
+
+    height: 110,
+
+    borderRadius: 12,
+
+    backgroundColor: COLORS.surfaceVariant,
   },
 
-  // Video
-  videoAddCell: {
-    width: 140,
-    height: 90,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    borderColor: COLORS.outlineVariant,
-    backgroundColor: COLORS.surfaceContainer,
-    alignItems: "center",
+  video: {
+    width: 110,
+
+    height: 110,
+
+    borderRadius: 12,
+
+    backgroundColor: COLORS.surfaceVariant,
+
     justifyContent: "center",
-    marginRight: 10,
-  },
-  videoAddIcon: {
-    fontSize: 22,
-  },
-  videoAddLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: COLORS.outline,
-    marginTop: 4,
-  },
-  videoCell: {
-    width: 140,
-    height: 90,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceContainerHighest,
+
     alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-    overflow: "hidden",
+
+    marginRight: 12,
   },
-  videoOverlay: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
+
+  videoIcon: {
+    fontSize: 32,
   },
-  playIcon: {
-    color: "#fff",
-    fontSize: 14,
+
+  videoText: {
+    marginTop: 10,
+
+    fontWeight: "600",
   },
-  videoName: {
+
+  delete: {
     position: "absolute",
-    bottom: 6,
-    left: 8,
-    right: 8,
-    fontSize: 9,
-    fontWeight: "700",
+
+    top: 6,
+
+    right: 6,
+
+    width: 26,
+
+    height: 26,
+
+    borderRadius: 13,
+
+    backgroundColor: "#ff4d4f",
+
+    justifyContent: "center",
+
+    alignItems: "center",
+  },
+
+  deleteText: {
     color: "#fff",
+
+    fontWeight: "700",
   },
 
   empty: {
-    fontSize: 13,
-    color: COLORS.outline,
-    paddingVertical: 8,
+    color: COLORS.onSurfaceVariant,
+
+    marginVertical: 20,
   },
+  mrgTwtyFv : {
+    marginTop : 25
+  },
+  mrgTwty : {
+    marginTop : 20
+  }
 });

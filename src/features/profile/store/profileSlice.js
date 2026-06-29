@@ -118,7 +118,7 @@ const profileSlice = createSlice({
   name: "profile",
 
   initialState: {
-    loading: false,
+    loading: true,
     profile: null,      // Player object from DB
     error: null,
     isCreated: false,   // true once player profile exists

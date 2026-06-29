@@ -51,11 +51,28 @@ export const ENDPOINTS = {
 
   MATCH: {
     LIST: "/matches",
+    CREATE: "/matches",
     DETAILS: "/matches/:id",
+    START: "/matches/:id/start",
+    COMPLETE: "/matches/:id/complete",
+    RESULT: "/matches/:id/result",
+    LIVE: "/matches/:id/live",
+    SUMMARY: "/matches/:id/summary",
+    BATTING_SCORECARD: "/matches/:id/batting-scorecard",
+    BOWLING_SCORECARD: "/matches/:id/bowling-scorecard",
+    FOW: "/matches/:id/fow",
+    FULL_SCORECARD: "/matches/:id/full-scorecard",
   },
 
   TEAM: {
     LIST: "/teams",
+    ALL: "/teams/all",
+    CREATE: "/teams",
     DETAILS: "/teams/:id",
+    PLAYERS: "/teams/:teamId/players",
+    PLAYER: "/teams/:teamId/players/:playerId",
+    CAPTAIN: "/teams/:teamId/captain",
   },
 };
+
+export default ENDPOINTS;

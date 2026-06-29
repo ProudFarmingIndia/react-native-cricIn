@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import useAuth from "../hooks/useAuth";
 import { verifyOtp, sendOtp } from "../store/authSlice";
 import {
@@ -57,17 +58,16 @@ export default function OtpScreen({ navigation, route }) {
   const handleVerifyOtp = async () => {
     const enteredOtp = otp.join("");
 
-    if (enteredOtp.length !== 6) {
-      alert("Enter 6 digit OTP");
-      return;
-    }
-
     const result = await verifyOTP(phone, enteredOtp);
 
+    console.log("VERIFY RESULT =>", JSON.stringify(result, null, 2));
+
     if (verifyOtp.fulfilled.match(result)) {
-      console.log("Login Success");
-    } else {
-      alert(result.payload?.message || "OTP verification failed");
+      console.log("LOGIN SUCCESS");
+
+      const token = await AsyncStorage.getItem("accessToken");
+
+      console.log("TOKEN SAVED =>", token);
     }
   };
 

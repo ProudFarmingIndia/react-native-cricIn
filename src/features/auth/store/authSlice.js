@@ -25,9 +25,25 @@ export const verifyOtp = createAsyncThunk(
       const response = await verifyOtpApi(mobile, otp);
       const token = response.data?.data?.token;
 
+      console.log(
+        "TOKEN FROM API =>",
+        token
+      );
       // Save to AsyncStorage so interceptor picks it up on next launch
       if (token) {
         await AsyncStorage.setItem("accessToken", token);
+        console.log(
+          "TOKEN SAVED TO STORAGE"
+        );
+         const saved =
+          await AsyncStorage.getItem(
+            "accessToken"
+          );
+
+        console.log(
+          "VERIFY STORAGE =>",
+          saved
+        );
       }
 
       return response.data;

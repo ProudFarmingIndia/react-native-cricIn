@@ -10,38 +10,39 @@ import {
   StatusBar,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+// import { NavigationHeader } from "../../../components/common/NavigationHeader";
 import { COLORS } from "../../../constants/colors";
 import { MaterialIcons } from "@expo/vector-icons";
 
 export default function HomeScreen() {
   const navigation = useNavigation();
+
+  // const onSearchPress = () => navigation.navigate("SearchScreen");
+  // const onChatPress = () => navigation.navigate("ChatScreen");
+  // const onNotificationPress = () => navigation.navigate("NotificationScreen");
+
+  const onSearchPress = () => {
+    console.log("Search button pressed");
+  }
+  const onChatPress = () => {
+    console.log("Chat button pressed");
+  }
+  const onNotificationPress = () => {
+    console.log("Notification button pressed");
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={COLORS.background} barStyle="dark-content" />
-
       {/* HEADER */}
-      <View style={styles.header}>
-        <View style={styles.logoRow}>
-          <MaterialIcons
-            name="sports-cricket"
-            size={26}
-            color={COLORS.primary}
-          />
-
-          <Text style={styles.logoText}>PitchMaster Pro</Text>
-        </View>
-
-        <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.iconButton}>
-            <MaterialIcons name="chat-bubble" size={20} color="#222" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.iconButton}>
-            <MaterialIcons name="notifications" size={20} color="#222" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
+      {/* <NavigationHeader
+        onMenuPress={() => console.log("Menu button pressed")}
+        onBackPress={() => navigation.goBack()}
+        onSearchPress={onSearchPress}
+        onChatPress={onChatPress}
+        onNotificationPress={onNotificationPress}
+      /> */}
+      
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
