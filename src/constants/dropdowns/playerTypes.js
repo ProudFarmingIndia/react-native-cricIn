@@ -1,0 +1,6 @@
+export default [
+  "Batsman",
+  "Bowler",
+  "All-Rounder",
+  "Wicket Keeper",
+];
