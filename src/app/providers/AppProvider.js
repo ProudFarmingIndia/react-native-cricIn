@@ -8,6 +8,7 @@ import { store } from '../../store/store';
 
 import AuthProvider from './AuthProvider';
 import ThemeProvider from './ThemeProvider';
+import NotificationProvider from './NotificationProvider';
 
 export default function AppProvider({
   children,
@@ -16,7 +17,9 @@ export default function AppProvider({
     <Provider store={store}>
       <AuthProvider>
         <ThemeProvider>
-          {children}
+          <NotificationProvider>
+            {children}
+          </NotificationProvider>
         </ThemeProvider>
       </AuthProvider>
     </Provider>

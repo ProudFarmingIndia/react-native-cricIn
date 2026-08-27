@@ -32,7 +32,7 @@ export default function AppHeader({
           </TouchableOpacity>
         ) : (
           <View
-            style={{ width: 24 }}
+            style={styles.InnerWidth}
           />
         )}
 
@@ -41,7 +41,7 @@ export default function AppHeader({
         </Text>
 
         <View
-          style={{ width: 24 }}
+          style={styles.InnerWidth}
         />
       </View>
     </SafeAreaView>
@@ -66,4 +66,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
   },
+  InnerWidth : {
+    width: 24
+  }
 });

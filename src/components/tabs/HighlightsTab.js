@@ -22,7 +22,7 @@ const highlights = [
 
 export default function HighlightsTab() {
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+    <ScrollView contentContainerStyle={styles.scrollContent}>
       {highlights.map((item, index) => (
         <View key={index} style={styles.card}>
           <Image
@@ -38,6 +38,10 @@ export default function HighlightsTab() {
 }
 
 const styles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 120,
+  },
+
   card: {
     backgroundColor: "#fff",
     marginHorizontal: 16,

@@ -4,7 +4,6 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   TextInput,
   StyleSheet,
 } from "react-native";
@@ -18,13 +17,9 @@ export default function SquadTeamSection({
   teamName,
   players,
   selectedPlayers,
-  captain,
-  viceCaptain,
   searchText,
   onSearch,
   onSelectPlayer,
-  onSetCaptain,
-  onSetViceCaptain,
 }) {
   const renderPlayer = ({ item }) => {
     const selected = selectedPlayers.some(
@@ -32,45 +27,11 @@ export default function SquadTeamSection({
     );
 
     return (
-      <View>
-        <PlayerCard
-          player={item}
-          selected={selected}
-          captain={captain === item._id}
-          viceCaptain={
-            viceCaptain === item._id
-          }
-          onSelect={onSelectPlayer}
-        />
-
-        {selected && (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.smallButton}
-              onPress={() =>
-                onSetCaptain(item._id)
-              }
-            >
-              <Text style={styles.smallButtonText}>
-                Captain
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.smallButton}
-              onPress={() =>
-                onSetViceCaptain(
-                  item._id
-                )
-              }
-            >
-              <Text style={styles.smallButtonText}>
-                Vice Captain
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+      <PlayerCard
+        player={item}
+        selected={selected}
+        onSelect={onSelectPlayer}
+      />
     );
   };
 
@@ -153,35 +114,6 @@ const styles = StyleSheet.create({
 
   counter: {
     marginBottom: 12,
-
-    fontWeight: "700",
-  },
-
-  actionRow: {
-    flexDirection: "row",
-
-    justifyContent: "flex-end",
-
-    marginBottom: 10,
-  },
-
-  smallButton: {
-    backgroundColor:
-      COLORS.primary,
-
-    paddingHorizontal: 10,
-
-    paddingVertical: 5,
-
-    borderRadius: 6,
-
-    marginLeft: 8,
-  },
-
-  smallButtonText: {
-    color: "#fff",
-
-    fontSize: 11,
 
     fontWeight: "700",
   },

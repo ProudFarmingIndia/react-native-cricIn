@@ -1,13 +1,9 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 
 export default function InsightsTab() {
   return (
-    <View
-      style={{
-        padding:16,
-      }}
-    >
+    <View style={styles.container}>
       <Text>
         Key Match Insights
       </Text>
@@ -26,3 +22,9 @@ export default function InsightsTab() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+});

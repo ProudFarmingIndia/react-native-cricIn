@@ -4,6 +4,7 @@ import {
   View,
   TouchableOpacity,
   Text,
+  StyleSheet,
 } from "react-native";
 
 export default function TeamProfileTabs({
@@ -11,13 +12,7 @@ export default function TeamProfileTabs({
   setActiveTab,
 }) {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        justifyContent: "space-around",
-        marginBottom: 20,
-      }}
-    >
+    <View style={styles.row}>
       {["squad", "matches", "stats"].map(
         tab => (
           <TouchableOpacity
@@ -27,12 +22,7 @@ export default function TeamProfileTabs({
             }
           >
             <Text
-              style={{
-                fontWeight:
-                  activeTab === tab
-                    ? "700"
-                    : "400",
-              }}
+              style={activeTab === tab ? styles.tabTextActive : styles.tabTextInactive}
             >
               {tab.toUpperCase()}
             </Text>
@@ -42,3 +32,19 @@ export default function TeamProfileTabs({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: 20,
+  },
+
+  tabTextActive: {
+    fontWeight: "700",
+  },
+
+  tabTextInactive: {
+    fontWeight: "400",
+  },
+});

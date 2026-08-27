@@ -4,6 +4,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Text,
+  StyleSheet,
 } from "react-native";
 
 const tabs = [
@@ -37,9 +38,7 @@ export default function AnalyticsTabs({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingHorizontal:16,
-      }}
+      contentContainerStyle={styles.container}
     >
       {tabs.map(tab => (
         <TouchableOpacity
@@ -49,24 +48,13 @@ export default function AnalyticsTabs({
               tab.key
             )
           }
-          style={{
-            paddingHorizontal:16,
-            paddingVertical:10,
-            marginRight:10,
-            borderRadius:20,
-            backgroundColor:
-              activeTab === tab.key
-                ? "#2E7D32"
-                : "#EAEAEA",
-          }}
+          style={[
+            styles.tab,
+            activeTab === tab.key ? styles.tabActive : styles.tabInactive,
+          ]}
         >
           <Text
-            style={{
-              color:
-                activeTab === tab.key
-                  ? "#fff"
-                  : "#000",
-            }}
+            style={activeTab === tab.key ? styles.labelActive : styles.labelInactive}
           >
             {tab.label}
           </Text>
@@ -75,3 +63,32 @@ export default function AnalyticsTabs({
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 16,
+  },
+
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginRight: 10,
+    borderRadius: 20,
+  },
+
+  tabActive: {
+    backgroundColor: "#2E7D32",
+  },
+
+  tabInactive: {
+    backgroundColor: "#EAEAEA",
+  },
+
+  labelActive: {
+    color: "#fff",
+  },
+
+  labelInactive: {
+    color: "#000",
+  },
+});

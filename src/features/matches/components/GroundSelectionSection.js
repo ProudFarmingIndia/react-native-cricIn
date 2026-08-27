@@ -60,10 +60,12 @@ export default function GroundSelectionSection({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.surfaceContainerLowest,
     padding: 16,
     borderRadius: 12,
     marginBottom: 100,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
   },
 
   heading: {
@@ -76,9 +78,10 @@ const styles = StyleSheet.create({
   input: {
     height: 50,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: COLORS.outlineVariant,
     borderRadius: 10,
     paddingHorizontal: 12,
     marginBottom: 12,
+    color: COLORS.onSurface,
   },
 });

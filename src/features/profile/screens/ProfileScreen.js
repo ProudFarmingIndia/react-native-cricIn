@@ -7,22 +7,25 @@ import {
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
+
 import HeroSection from "../components/HeroSection";
 import ProfileTabBar from "../components/ProfileTabBar";
 import OverviewTab from "../common/tabs/OverviewTab";
-import StatsTab from "../common/tabs/StatsTab";
 import TeamsTab from "../common/tabs/TeamsTab";
 import MatchesTab from "../common/tabs/MatchesTab";
 import GalleryTab from "../common/tabs/GalleryTab";
+
+// Batch 4: Auto-updated career stats component
+import PlayerCareerStatsSection from "../../../components/matches/PlayerCareerStatsSection";
+
 import { getProfile } from "../store/profileSlice";
 import { COLORS } from "../../../constants/colors";
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ route }) {
   const dispatch = useDispatch();
-
   const navigation = useNavigation();
 
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab ?? 0);
 
   const { profile, loading } = useSelector((state) => state.profile || {});
 
@@ -33,6 +36,23 @@ export default function ProfileScreen() {
 
     return unsubscribe;
   }, [navigation, dispatch]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | No Profile Yet
+  |--------------------------------------------------------------------------
+  |
+  | getProfile resolves successfully with data: null when the logged-in
+  | user hasn't created a player profile yet — that's expected for a
+  | brand-new user, not an error. EditProfileScreen handles both create
+  | and update, so we route there instead of spinning forever.
+  |
+  */
+  useEffect(() => {
+    if (!loading && !profile) {
+      navigation.replace("EditProfileScreen");
+    }
+  }, [loading, profile, navigation]);
 
   if (loading || !profile) {
     return (
@@ -57,7 +77,16 @@ export default function ProfileScreen() {
 
         {activeTab === 0 && <OverviewTab profile={profile} />}
 
-        {activeTab === 1 && <StatsTab profile={profile} />}
+        {/*
+         * Tab 1 — Stats
+         * Batch 4: Replaced StatsTab with PlayerCareerStatsSection.
+         * stats are auto-updated by the backend on every match completion
+         * via updatePlayerStatsOnMatchComplete (player.stats.service.ts).
+         * profile.stats is the persisted career stats object on the Player doc.
+         */}
+        {activeTab === 1 && (
+          <PlayerCareerStatsSection stats={profile?.stats} />
+        )}
 
         {activeTab === 2 && <TeamsTab profile={profile} />}
 
@@ -77,17 +106,13 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-
     backgroundColor: COLORS.background,
   },
 
   loaderContainer: {
     flex: 1,
-
     justifyContent: "center",
-
     alignItems: "center",
-
     backgroundColor: COLORS.background,
   },
 

@@ -4,6 +4,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Text,
+  StyleSheet,
 } from "react-native";
 
 const filters = [
@@ -31,26 +32,13 @@ export default function TeamFilterChips({
               filter
             )
           }
-          style={{
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderRadius: 30,
-            backgroundColor:
-              selected ===
-              filter
-                ? "#0B7A0B"
-                : "#fff",
-            marginRight: 10,
-          }}
+          style={[
+            styles.chip,
+            selected === filter ? styles.chipActive : styles.chipInactive,
+          ]}
         >
           <Text
-            style={{
-              color:
-                selected ===
-                filter
-                  ? "#fff"
-                  : "#333",
-            }}
+            style={selected === filter ? styles.chipTextActive : styles.chipTextInactive}
           >
             {filter}
           </Text>
@@ -59,3 +47,28 @@ export default function TeamFilterChips({
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 30,
+    marginRight: 10,
+  },
+
+  chipActive: {
+    backgroundColor: "#0B7A0B",
+  },
+
+  chipInactive: {
+    backgroundColor: "#fff",
+  },
+
+  chipTextActive: {
+    color: "#fff",
+  },
+
+  chipTextInactive: {
+    color: "#333",
+  },
+});

@@ -92,7 +92,7 @@ export default function OtpScreen({ navigation, route }) {
 
         <Text style={styles.subtitle}>
           Enter the 6-digit code sent to{" "}
-          <Text style={{ fontWeight: "700" }}>+91 {phone}</Text>
+          <Text style={styles.phoneBold}>+91 {phone}</Text>
         </Text>
 
         <TouchableOpacity
@@ -150,6 +150,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     padding: SPACING.lg,
     justifyContent: "center",
+  },
+
+  phoneBold: {
+    fontWeight: "700",
   },
 
   header: {

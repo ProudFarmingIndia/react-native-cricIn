@@ -8,7 +8,10 @@ import QuickScoreScreen from "../../../features/matches/screens/QuickScoreScreen
 import TeamSelectionScreen from "../../../features/matches/screens/TeamSelectionScreen";
 import SquadSelectionScreen from "../../../features/matches/screens/SquadSelectionScreen";
 import TossScreen from "../../../features/matches/screens/TossScreen";
-import PlayingXISelectionScreen from "../../../features/matches/screens/MatchLineUpScreen";
+import MatchLineUpScreen from "../../../features/matches/screens/MatchLineUpScreen";
+import MatchApprovalPendingScreen from "../../../features/matches/screens/MatchApprovalPendingScreen";
+import MatchApprovalScreen from "../../../features/matches/screens/MatchApprovalScreen";
+import MatchDetailsScreen from "../../../features/matches/screens/MatchDetailsScreen";
 import LiveScoringScreen from "../../../features/matches/screens/LiveScoringScreen";
 import OverSummaryScreen from "../../../features/matches/screens/OverSummaryScreen";
 import InningsSummaryScreen from "../../../features/matches/screens/InningsSummaryScreen";
@@ -18,6 +21,7 @@ import MatchCenterScreen from "../../../features/matches/screens/MatchCenterScre
 import ShotSelectionModal from "../../../features/matches/screens/ShotSelectionModal";
 import WagonWheelModal from "../../../features/matches/screens/WagonWheelModal";
 import WicketDismissalModal from "../../../features/matches/screens/WicketDismissalModal";
+import ScorecardScreen from "../../../features/matches/screens/ScorecardScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -70,8 +74,23 @@ export default function QuickScoreStackNavigator() {
 
       {/* 5 */}
       <Stack.Screen
-        name="PlayingXISelectionScreen"
-        component={PlayingXISelectionScreen}
+        name="MatchLineUpScreen"
+        component={MatchLineUpScreen}
+      />
+
+      <Stack.Screen
+        name="MatchApprovalPendingScreen"
+        component={MatchApprovalPendingScreen}
+      />
+
+      <Stack.Screen
+        name="MatchApprovalScreen"
+        component={MatchApprovalScreen}
+      />
+
+      <Stack.Screen
+        name="MatchDetailsScreen"
+        component={MatchDetailsScreen}
       />
 
       {/* 6 */}
@@ -127,6 +146,11 @@ export default function QuickScoreStackNavigator() {
         // }}
       />
 
+      <Stack.Screen
+        name="ScorecardScreen"
+        component={ScorecardScreen}
+      />
+
       {/* 11 */}
       <Stack.Screen
         name="MatchCenterScreen"
@@ -162,6 +186,8 @@ export default function QuickScoreStackNavigator() {
           headerShown: false,
         }}
       />
+
+      
     </Stack.Navigator>
   );
 }

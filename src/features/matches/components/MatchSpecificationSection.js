@@ -10,50 +10,80 @@ import {
 
 import { COLORS } from "../../../constants/colors";
 
-const BALL_TYPES = [
-  "Leather",
-  "Tennis",
-  "Other",
+/*
+|--------------------------------------------------------------------------
+| Match Specification Section
+|--------------------------------------------------------------------------
+|
+| Match Type is a chip select mapped to the backend matchType enum.
+| Picking a type auto-fills overs, but overs stays editable.
+|
+| Date/Time fields are only rendered in "scheduled" mode — a Quick Match
+| has no planned start time.
+*/
+
+const MATCH_TYPES = [
+  { value: "T5", label: "T5", overs: 5 },
+  { value: "T10", label: "T10", overs: 10 },
+  { value: "T20", label: "T20", overs: 20 },
+  { value: "ODI", label: "ODI", overs: 50 },
+  { value: "Test", label: "Test", overs: null },
 ];
 
-const PITCH_TYPES = [
-  "Turf",
-  "Matting",
-  "Concrete",
-];
+const BALL_TYPES = ["Leather", "Tennis", "Other"];
+
+const PITCH_TYPES = ["Turf", "Matting", "Concrete"];
 
 export default function MatchSpecificationSection({
   matchData,
   updateField,
+  mode = "quick",
 }) {
+  const handleSelectMatchType = (type) => {
+    updateField("matchType", type.value);
+
+    if (type.overs != null) {
+      updateField("overs", type.overs);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>
-        Match Specifications
-      </Text>
+      <Text style={styles.heading}>Match Specifications</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Match Type"
-        value={matchData.matchType}
-        onChangeText={(text) =>
-          updateField("matchType", text)
-        }
-      />
+      <Text style={styles.label}>Match Type</Text>
+
+      <View style={styles.row}>
+        {MATCH_TYPES.map((type) => (
+          <TouchableOpacity
+            key={type.value}
+            style={[
+              styles.chip,
+              matchData.matchType === type.value && styles.activeChip,
+            ]}
+            onPress={() => handleSelectMatchType(type)}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                matchData.matchType === type.value && styles.activeChipText,
+              ]}
+            >
+              {type.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <TextInput
         style={styles.input}
         placeholder="Overs"
         keyboardType="numeric"
         value={String(matchData.overs)}
-        onChangeText={(text) =>
-          updateField("overs", text)
-        }
+        onChangeText={(text) => updateField("overs", Number(text) || 0)}
       />
 
-      <Text style={styles.label}>
-        Ball Type
-      </Text>
+      <Text style={styles.label}>Ball Type</Text>
 
       <View style={styles.row}>
         {BALL_TYPES.map((item) => (
@@ -61,24 +91,23 @@ export default function MatchSpecificationSection({
             key={item}
             style={[
               styles.chip,
-              matchData.ballType === item &&
-                styles.activeChip,
+              matchData.ballType === item && styles.activeChip,
             ]}
-            onPress={() =>
-              updateField(
-                "ballType",
-                item
-              )
-            }
+            onPress={() => updateField("ballType", item)}
           >
-            <Text>{item}</Text>
+            <Text
+              style={[
+                styles.chipText,
+                matchData.ballType === item && styles.activeChipText,
+              ]}
+            >
+              {item}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.label}>
-        Pitch Type
-      </Text>
+      <Text style={styles.label}>Pitch Type</Text>
 
       <View style={styles.row}>
         {PITCH_TYPES.map((item) => (
@@ -86,54 +115,53 @@ export default function MatchSpecificationSection({
             key={item}
             style={[
               styles.chip,
-              matchData.pitchType === item &&
-                styles.activeChip,
+              matchData.pitchType === item && styles.activeChip,
             ]}
-            onPress={() =>
-              updateField(
-                "pitchType",
-                item
-              )
-            }
+            onPress={() => updateField("pitchType", item)}
           >
-            <Text>{item}</Text>
+            <Text
+              style={[
+                styles.chipText,
+                matchData.pitchType === item && styles.activeChipText,
+              ]}
+            >
+              {item}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Match Date"
-        value={matchData.matchDate}
-        onChangeText={(text) =>
-          updateField(
-            "matchDate",
-            text
-          )
-        }
-      />
+      {mode === "scheduled" && (
+        <>
+          <Text style={styles.label}>Schedule</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Match Time"
-        value={matchData.matchTime}
-        onChangeText={(text) =>
-          updateField(
-            "matchTime",
-            text
-          )
-        }
-      />
+          <TextInput
+            style={styles.input}
+            placeholder="Match Date (YYYY-MM-DD)"
+            value={matchData.matchDate}
+            onChangeText={(text) => updateField("matchDate", text)}
+          />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Match Time (HH:MM, 24-hour)"
+            value={matchData.matchTime}
+            onChangeText={(text) => updateField("matchTime", text)}
+          />
+        </>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.surfaceContainerLowest,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
   },
 
   heading: {
@@ -146,6 +174,9 @@ const styles = StyleSheet.create({
   label: {
     marginBottom: 8,
     marginTop: 10,
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.onSurfaceVariant,
   },
 
   row: {
@@ -159,21 +190,33 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: COLORS.outlineVariant,
     marginRight: 8,
     marginBottom: 8,
   },
 
   activeChip: {
-    backgroundColor: "#dff1df",
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+
+  chipText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.onSurfaceVariant,
+  },
+
+  activeChipText: {
+    color: COLORS.onPrimary,
   },
 
   input: {
     height: 50,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: COLORS.outlineVariant,
     borderRadius: 10,
     paddingHorizontal: 12,
     marginBottom: 12,
+    color: COLORS.onSurface,
   },
 });

@@ -17,7 +17,7 @@ const teams = [
 
 export default function TeamsTab() {
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+    <ScrollView contentContainerStyle={styles.scrollContent}>
       {teams.map((team, index) => (
         <View key={index} style={styles.teamCard}>
           <Text style={styles.teamName}>{team}</Text>
@@ -29,6 +29,10 @@ export default function TeamsTab() {
 }
 
 const styles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 120,
+  },
+
   teamCard: {
     backgroundColor: "#fff",
     marginHorizontal: 16,

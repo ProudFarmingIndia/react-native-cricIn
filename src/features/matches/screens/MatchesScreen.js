@@ -42,7 +42,7 @@ export default function MatchListScreen() {
 
       <MatchesTopTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      <View style={{ flex: 1 }}>{renderTab()}</View>
+      <View style={styles.content}>{renderTab()}</View>
     </SafeAreaView>
   );
 }
@@ -51,5 +51,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+
+  content: {
+    flex: 1,
   },
 });

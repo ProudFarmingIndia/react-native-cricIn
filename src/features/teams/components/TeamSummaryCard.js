@@ -7,12 +7,16 @@ import {
 
 export default function TeamSummaryCard({
   teamData,
-  players,
+  players = [],
 }) {
+  const name =
+    teamData?.teamName ||
+    "Untitled Team";
+
   return (
     <View style={styles.card}>
       <Text style={styles.teamName}>
-        {teamData.teamName}
+        {name}
       </Text>
 
       <Text>

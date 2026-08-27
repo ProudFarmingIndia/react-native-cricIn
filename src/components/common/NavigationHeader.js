@@ -4,15 +4,22 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Header from "./Header";
 import { HEADER_CONFIG } from "../../constants/headerConstant";
 import { COLORS } from "../../constants/colors";
+import { useSidebar } from "../../context/SidebarContext";
 
 export default function NavigationHeader({ route }) {
   const navigation = useNavigation();
 
+  const { openSidebar } = useSidebar();
+
   const config = HEADER_CONFIG?.[route?.name] || {};
 
-  console.log(
-  "NavigationHeader Rendered"
-);
+  const handleNotificationPress = () => {
+    navigation.navigate("NotificationScreen");
+  };
+
+  const handleSearchPress = () => {
+    navigation.navigate("SearchScreen");
+  }
 
   return (
     <SafeAreaView
@@ -29,10 +36,11 @@ export default function NavigationHeader({ route }) {
         showChat={config.showChat}
         ShowCricInICon={config.ShowCricInICon}
         showNotification={config.showNotification}
+        onMenuPress={openSidebar}
         onBackPress={() => navigation.goBack()}
-        onSearchPress={() => console.log("Search")}
+        onSearchPress={handleSearchPress}
         onChatPress={() => console.log("Chat")}
-        onNotificationPress={() => console.log("Notification")}
+        onNotificationPress={handleNotificationPress}
       />
     </SafeAreaView>
   );

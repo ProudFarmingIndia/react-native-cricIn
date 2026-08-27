@@ -1,119 +1,151 @@
-import React, {
-  useState,
-} from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   ScrollView,
   View,
+  StyleSheet,
+  ActivityIndicator,
+  Text,
 } from "react-native";
 
 import TeamSearchBar from "../components/TeamSearchBar";
 import TeamFilterChips from "../components/TeamFilterChips";
 import TeamCard from "../components/TeamCard";
 
-export default function FindTeamsScreen({
-  navigation,
-}) {
-  const [search, setSearch] =
-    useState("");
+import apiClient from "../../../services/api/apiClient";
+import { ENDPOINTS } from "../../../services/api/endpoints";
 
-  const [selectedFilter,
-    setSelectedFilter] =
-    useState("Nearby");
+export default function FindTeamsScreen({ navigation }) {
+  const [search, setSearch] = useState("");
+  const [selectedFilter, setSelectedFilter] = useState("Nearby");
 
-  const teams = [
-    {
-      id: "1",
+  const [teams, setTeams] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-      name:
-        "Mumbai Titans",
+  const debounceRef = useRef(null);
 
-      captain:
-        "Rahul",
+  /*
+  |--------------------------------------------------------------------------
+  | Search teams (debounced 500ms)
+  |--------------------------------------------------------------------------
+  */
 
-      strength: 8.2,
+  const fetchTeams = async (query) => {
+    try {
+      setLoading(true);
+      setError(null);
 
-      location:
-        "Mumbai",
+      const response = await apiClient.get(ENDPOINTS.SEARCH.TEAMS, {
+        params: { query },
+      });
 
-      banner:
-        "https://picsum.photos/500/300",
-    },
+      const data =
+        response.data?.data?.results ??
+        response.data?.data ??
+        response.data?.results ??
+        response.data ??
+        [];
 
-    {
-      id: "2",
+      setTeams(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Could not load teams.",
+      );
+      setTeams([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      name:
-        "Delhi Dynamos",
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
 
-      captain:
-        "Vikram",
+    debounceRef.current = setTimeout(() => {
+      fetchTeams(search.trim());
+    }, 500);
 
-      strength: 8.5,
-
-      location:
-        "Delhi",
-
-      banner:
-        "https://picsum.photos/501/300",
-    },
-
-    {
-      id: "3",
-
-      name:
-        "Pune Hawks",
-
-      captain:
-        "Sameer",
-
-      strength: 8.0,
-
-      location:
-        "Pune",
-
-      banner:
-        "https://picsum.photos/502/300",
-    },
-  ];
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [search]);
 
   return (
-    <ScrollView
-      contentContainerStyle={{
-        padding: 16,
-      }}
-    >
-      <TeamSearchBar
-        value={search}
-        onChangeText={
-          setSearch
-        }
-      />
+    <ScrollView contentContainerStyle={styles.scrollContent}>
+      <TeamSearchBar value={search} onChangeText={setSearch} />
 
-      <View
-        style={{
-          marginBottom: 16,
-        }}
-      >
+      <View style={styles.filterWrap}>
         <TeamFilterChips
-          selected={
-            selectedFilter
-          }
-          setSelected={
-            setSelectedFilter
-          }
+          selected={selectedFilter}
+          setSelected={setSelectedFilter}
         />
       </View>
 
-      {teams.map(team => (
-        <TeamCard
-          key={team.id}
-          team={team}
-          navigation={
-            navigation
-          }
-        />
-      ))}
+      {loading && (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#0B7A0B" />
+        </View>
+      )}
+
+      {!loading && error && (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {!loading && !error && teams.length === 0 && (
+        <View style={styles.centered}>
+          <Text style={styles.emptyText}>
+            {search.trim()
+              ? "No teams found."
+              : "Search for teams to challenge."}
+          </Text>
+        </View>
+      )}
+
+      {!loading &&
+        teams.map((team) => (
+          <TeamCard
+            key={team._id || team.id}
+            team={team}
+            onPress={() =>
+              navigation.navigate("ChallengeMatchScreen", { team })
+            }
+          />
+        ))}
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  scrollContent: {
+    padding: 16,
+    flexGrow: 1,
+  },
+
+  filterWrap: {
+    marginBottom: 16,
+  },
+
+  centered: {
+    paddingVertical: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  errorText: {
+    color: "#D32F2F",
+    fontSize: 14,
+  },
+
+  emptyText: {
+    color: "#777",
+    fontSize: 14,
+  },
+});

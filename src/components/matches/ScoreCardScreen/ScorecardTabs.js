@@ -1,68 +1,72 @@
 import React from "react";
 
-import {
-  ScrollView,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-} from "react-native";
+import { ScrollView, TouchableOpacity, Text, StyleSheet } from "react-native";
 
-const tabs = [
-  "batting",
-  "bowling",
-  "fow",
-  "partnerships",
-  "info",
+import { COLORS } from "../../../constants/colors";
+
+const TABS = [
+  { key: "batting", label: "Batting" },
+  { key: "bowling", label: "Bowling" },
+  { key: "fow", label: "Fall of Wkts" },
+  { key: "partnerships", label: "Partnerships" },
+  { key: "info", label: "Info" },
 ];
 
-export default function ScorecardTabs({
-  activeTab,
-  setActiveTab,
-}) {
+export default function ScorecardTabs({ activeTab, setActiveTab }) {
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={
-        styles.container
-      }
+      contentContainerStyle={styles.container}
     >
-      {tabs.map(tab => (
-        <TouchableOpacity
-          key={tab}
-          style={[
-            styles.tab,
-            activeTab === tab &&
-              styles.activeTab,
-          ]}
-          onPress={() =>
-            setActiveTab(tab)
-          }
-        >
-          <Text>
-            {tab.toUpperCase()}
-          </Text>
-        </TouchableOpacity>
-      ))}
+      {TABS.map((tab) => {
+        const isActive = activeTab === tab.key;
+
+        return (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tab, isActive && styles.tabActive]}
+            onPress={() => setActiveTab(tab.key)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </ScrollView>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    container:{
-      padding:10,
-    },
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
 
-    tab:{
-      paddingHorizontal:16,
-      paddingVertical:10,
-      backgroundColor:"#eee",
-      borderRadius:20,
-      marginRight:10,
-    },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: COLORS.surfaceContainerLowest,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+  },
 
-    activeTab:{
-      backgroundColor:"#C8E6C9",
-    },
-  });
+  tabActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+
+  tabText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.onSurfaceVariant,
+  },
+
+  tabTextActive: {
+    color: "#fff",
+  },
+});

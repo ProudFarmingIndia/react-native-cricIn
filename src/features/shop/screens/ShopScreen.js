@@ -80,34 +80,9 @@ export default function ShopScreen() {
         barStyle="dark-content"
       />
 
-      {/* HEADER */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <MaterialIcons
-            name="sports-cricket"
-            size={28}
-            color={COLORS.primary}
-          />
-
-          <Text style={styles.headerTitle}>
-            Explore Shops
-          </Text>
-        </View>
-
-        <TouchableOpacity style={styles.notificationBtn}>
-          <MaterialIcons
-            name="notifications-none"
-            size={24}
-            color={COLORS.text}
-          />
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: 120,
-        }}
+        contentContainerStyle={styles.scrollContent}
       >
         {/* SEARCH */}
         <View style={styles.searchWrapper}>
@@ -189,7 +164,7 @@ export default function ShopScreen() {
 
             <View style={styles.cardContent}>
               <View style={styles.shopTopRow}>
-                <View style={{ flex: 1 }}>
+                <View style={styles.shopNameWrap}>
                   <Text style={styles.shopName}>
                     {shop.name}
                   </Text>
@@ -258,6 +233,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+
+  scrollContent: {
+    paddingBottom: 120,
+  },
+
+  shopNameWrap: {
+    flex: 1,
   },
 
   header: {

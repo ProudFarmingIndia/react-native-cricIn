@@ -8,7 +8,7 @@ import {
 
 export default function StatsTab() {
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+    <ScrollView contentContainerStyle={styles.scrollContent}>
       <View style={styles.card}>
         <Text style={styles.title}>Top Run Scorer</Text>
         <Text style={styles.player}>Virat Kohli - 765 Runs</Text>
@@ -28,6 +28,10 @@ export default function StatsTab() {
 }
 
 const styles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 120,
+  },
+
   card: {
     backgroundColor: "#fff",
     marginHorizontal: 16,

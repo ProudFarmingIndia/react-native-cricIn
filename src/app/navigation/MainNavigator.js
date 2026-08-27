@@ -1,24 +1,34 @@
 import React from "react";
-
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-
 import Ionicons from "@expo/vector-icons/Ionicons";
 
 import HomeStackNavigator from "./home/HomeStackNavigator";
-
 import MatchNavigator from "./matches/MatchNavigator";
-
 import GroundsStackNavigator from "./grounds/GroundsStackNavigator";
-
 import ShopStackNavigator from "./shop/ShopStackNavigator";
-
 import ProfileStackNavigator from "./profile/ProfileStackNavigator";
-
-import TeamStackNavigator from "./teams/TeamStackNavigator";
 
 import { COLORS } from "../../constants/colors";
 
 const Tab = createBottomTabNavigator();
+
+const getTabBarIcon = (routeName, focused, color) => {
+  const iconMap = {
+    Home: focused ? "home" : "home-outline",
+    Matches: focused ? "trophy" : "trophy-outline",
+    Grounds: focused ? "location" : "location-outline",
+    Shop: focused ? "bag" : "bag-outline",
+    Profile: focused ? "person" : "person-outline",
+  };
+
+  return (
+    <Ionicons
+      name={iconMap[routeName] || "ellipse-outline"}
+      size={22}
+      color={color}
+    />
+  );
+};
 
 export default function MainNavigator() {
   return (
@@ -36,7 +46,6 @@ export default function MainNavigator() {
         },
 
         tabBarActiveTintColor: COLORS.primary,
-
         tabBarInactiveTintColor: COLORS.onSurfaceVariant,
 
         tabBarLabelStyle: {
@@ -44,36 +53,8 @@ export default function MainNavigator() {
           fontWeight: "700",
         },
 
-        tabBarIcon: ({ focused, color }) => {
-          let iconName;
-
-          switch (route.name) {
-            case "Home":
-              iconName = focused ? "home" : "home-outline";
-              break;
-
-            case "Matches":
-              iconName = focused ? "trophy" : "trophy-outline";
-              break;
-
-            case "Grounds":
-              iconName = focused ? "location" : "location-outline";
-              break;
-
-            case "Shop":
-              iconName = focused ? "bag" : "bag-outline";
-              break;
-
-            case "Profile":
-              iconName = focused ? "person" : "person-outline";
-              break;
-
-            default:
-              iconName = "ellipse-outline";
-          }
-
-          return <Ionicons name={iconName} size={22} color={color} />;
-        },
+        tabBarIcon: ({ focused, color }) =>
+          getTabBarIcon(route.name, focused, color),
       })}
     >
       <Tab.Screen name="Home" component={HomeStackNavigator} />
@@ -85,7 +66,6 @@ export default function MainNavigator() {
       <Tab.Screen name="Shop" component={ShopStackNavigator} />
 
       <Tab.Screen name="Profile" component={ProfileStackNavigator} />
-      
     </Tab.Navigator>
   );
 }

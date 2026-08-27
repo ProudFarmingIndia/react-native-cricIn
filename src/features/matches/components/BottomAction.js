@@ -1,14 +1,39 @@
 import React from "react";
 
-import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
+import {
+  View,
+  TouchableOpacity,
+  Text,
+  ActivityIndicator,
+  StyleSheet,
+} from "react-native";
 
 import { COLORS } from "../../../constants/colors";
 
-export default function BottomAction({ onContinue }) {
+/*
+|--------------------------------------------------------------------------
+| Bottom Action
+|--------------------------------------------------------------------------
+|
+| disabled/loading matter here specifically because this button triggers
+| an async API call (createMatchApi) - without a disabled state, a quick
+| double-tap while the request is in flight could create the same match
+| twice.
+*/
+
+export default function BottomAction({ onContinue, disabled = false, label = "Continue" }) {
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.button} onPress={onContinue}>
-        <Text style={styles.text}>Continue</Text>
+      <TouchableOpacity
+        style={[styles.button, disabled && styles.buttonDisabled]}
+        onPress={onContinue}
+        disabled={disabled}
+      >
+        {disabled ? (
+          <ActivityIndicator size="small" color={COLORS.onPrimary} />
+        ) : (
+          <Text style={styles.text}>{label}</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -21,13 +46,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
 
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.surfaceContainerLowest,
 
     padding: 16,
 
     borderTopWidth: 1,
 
-    borderTopColor: "#ddd",
+    borderTopColor: COLORS.outlineVariant,
   },
 
   button: {
@@ -42,8 +67,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+
   text: {
-    color: "#fff",
+    color: COLORS.onPrimary,
 
     fontSize: 16,
 

@@ -14,8 +14,6 @@ import { COLORS } from "../../../constants/colors";
 export default function PlayerCard({
   player,
   selected,
-  captain,
-  viceCaptain,
   onSelect,
 }) {
   return (
@@ -29,55 +27,40 @@ export default function PlayerCard({
       <View style={styles.leftSection}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
-            {player.name?.charAt(0)}
+            {player.playerName?.charAt(0)}
           </Text>
         </View>
 
         <View style={styles.playerInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.playerName}>
-              {player.name}
+              {player.playerName}
             </Text>
-
-            {captain && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  C
-                </Text>
-              </View>
-            )}
-
-            {viceCaptain && (
-              <View
-                style={[
-                  styles.badge,
-                  styles.vcBadge,
-                ]}
-              >
-                <Text style={styles.badgeText}>
-                  VC
-                </Text>
-              </View>
-            )}
           </View>
 
           <Text style={styles.role}>
-            {player.role}
+            {player.playerType}
           </Text>
 
-          <View style={styles.tagRow}>
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>
-                {player.batting}
-              </Text>
-            </View>
+          {(!!player.battingStyle || !!player.bowlingStyle) && (
+            <View style={styles.tagRow}>
+              {!!player.battingStyle && (
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>
+                    {player.battingStyle}
+                  </Text>
+                </View>
+              )}
 
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>
-                {player.bowling}
-              </Text>
+              {!!player.bowlingStyle && (
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>
+                    {player.bowlingStyle}
+                  </Text>
+                </View>
+              )}
             </View>
-          </View>
+          )}
         </View>
       </View>
 
@@ -203,29 +186,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
 
     fontWeight: "600",
-  },
-
-  badge: {
-    backgroundColor: COLORS.primary,
-
-    marginLeft: 6,
-
-    borderRadius: 4,
-
-    paddingHorizontal: 5,
-
-    paddingVertical: 2,
-  },
-
-  vcBadge: {
-    backgroundColor: "#F57C00",
-  },
-
-  badgeText: {
-    color: "#fff",
-
-    fontSize: 10,
-
-    fontWeight: "700",
   },
 });

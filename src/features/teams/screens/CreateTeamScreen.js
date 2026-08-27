@@ -1,340 +1,133 @@
-import React, { useState } from "react";
+import React from "react";
 
 import {
-  View,
-  Text,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Switch,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-
-import Ionicons from "@expo/vector-icons/Ionicons";
 
 import { useSelector } from "react-redux";
 
-import PrimaryButton from "../../../components/Button/PrimaryButton";
-
 import { COLORS } from "../../../constants/colors";
 
-export default function CreateTeamScreen({
-  navigation,
-}) {
-  const user = useSelector(
-    (state) => state.auth.user
-  );
+import useTeam from "../hooks/useTeam";
+import useCreateTeam from "../hooks/useCreateTeam";
 
-  const [teamData, setTeamData] =
-    useState({
-      logo: null,
+import StepIndicator from "../../../components/common/StepIndicator";
+import TeamLogoUploader from "../components/TeamLogoUploader";
+import TeamBasicInfoSection from "../components/TeamBasicInfoSection";
+import TeamTypeSelector from "../components/TeamTypeSelector";
+import TeamLocationSection from "../components/TeamLocationSection";
+import TeamBioSection from "../components/TeamBioSection";
+import TeamTipCard from "../components/TeamTipCard";
+import TeamBottomActionBar from "../components/TeamBottomActionBar";
 
-      teamName: "",
+export default function CreateTeamScreen({ navigation }) {
+  /*
+  |--------------------------------------------------------------------------
+  | Hooks
+  |--------------------------------------------------------------------------
+  */
 
-      shortName: "",
+  const { createTeam, loading } = useTeam();
 
-      teamType: "Club",
+  const user = useSelector((state) => state.auth.user);
 
-      country: "India",
+  const { teamData, updateField, pickLogo, validate } = useCreateTeam({
+    logo: null,
 
-      state: "",
+    teamName: "",
 
-      city: "",
+    shortName: "",
 
-      visibility: "public",
+    teamType: "Club",
 
-      captain: user?._id,
-    });
+    country: "India",
 
-  const updateField = (
-    key,
-    value
-  ) => {
-    setTeamData((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
+    state: "",
 
-  const teamTypes = [
-    "Club",
-    "Corporate",
-    "Academy",
-    "Friends",
-    "School",
-    "College",
-  ];
+    city: "",
 
-  const handleContinue = () => {
-    if (!teamData.teamName) {
-      alert("Enter Team Name");
+    bio: "",
+
+    visibility: "public",
+
+    captain: user?._id,
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Continue
+  |--------------------------------------------------------------------------
+  */
+
+  const handleContinue = async () => {
+    const result = validate();
+
+    if (!result.valid) {
+      console.log(result.message);
+
       return;
     }
 
-    if (!teamData.shortName) {
-      alert("Enter Short Name");
-      return;
-    }
+    try {
+      const response = await createTeam(teamData);
 
-    navigation.navigate(
-      "AddPlayersScreen",
-      {
-        teamData,
+      // const response = await createTeam(teamData);
+
+      console.log("Create Team Response:", response);
+      if (response.success) {
+        navigation.navigate("AddPlayerScreen", {
+          teamId: response.data?._id,
+          team: response.data,
+          teamName: response.data?.teamName || teamData.teamName,
+        });
       }
-    );
+    } catch (error) {
+      console.log(error);
+    }
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Render
+  |--------------------------------------------------------------------------
+  */
 
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={styles.container}
-      showsVerticalScrollIndicator={
-        false
-      }
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* LOGO */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
+        <StepIndicator currentStep={1} totalSteps={2} />
 
-      <View style={styles.logoSection}>
-        <TouchableOpacity
-          style={styles.logoContainer}
-        >
-          <Ionicons
-            name="camera-outline"
-            size={40}
-            color="#999"
-          />
+        <TeamLogoUploader logo={teamData.logo} onPress={pickLogo} />
 
-          <Text
-            style={styles.uploadText}
-          >
-            Upload Logo
-          </Text>
-        </TouchableOpacity>
+        <TeamBasicInfoSection teamData={teamData} updateField={updateField} />
 
-        <Text style={styles.logoHint}>
-          Recommended size:
-          500x500
-        </Text>
-      </View>
-
-      {/* TEAM INFO */}
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>
-          Team Information
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Team Name"
-          value={teamData.teamName}
-          onChangeText={(text) =>
-            updateField(
-              "teamName",
-              text
-            )
-          }
+        <TeamTypeSelector
+          value={teamData.teamType}
+          onChange={(value) => updateField("teamType", value)}
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Short Name"
-          value={teamData.shortName}
-          onChangeText={(text) =>
-            updateField(
-              "shortName",
-              text
-            )
-          }
-        />
-      </View>
+        <TeamLocationSection teamData={teamData} updateField={updateField} />
 
-      {/* TEAM TYPE */}
+        <TeamBioSection teamData={teamData} updateField={updateField} />
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>
-          Team Type
-        </Text>
+        <TeamTipCard />
+      </ScrollView>
 
-        <View
-          style={styles.chipsContainer}
-        >
-          {teamTypes.map(
-            (type) => (
-              <TouchableOpacity
-                key={type}
-                onPress={() =>
-                  updateField(
-                    "teamType",
-                    type
-                  )
-                }
-                style={[
-                  styles.chip,
-
-                  teamData.teamType ===
-                    type &&
-                    styles.activeChip,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-
-                    teamData.teamType ===
-                      type &&
-                      styles.activeChipText,
-                  ]}
-                >
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            )
-          )}
-        </View>
-      </View>
-
-      {/* LOCATION */}
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>
-          Location
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Country"
-          value={teamData.country}
-          onChangeText={(text) =>
-            updateField(
-              "country",
-              text
-            )
-          }
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="State"
-          value={teamData.state}
-          onChangeText={(text) =>
-            updateField(
-              "state",
-              text
-            )
-          }
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="City"
-          value={teamData.city}
-          onChangeText={(text) =>
-            updateField(
-              "city",
-              text
-            )
-          }
-        />
-      </View>
-
-      {/* VISIBILITY */}
-
-      <View style={styles.card}>
-        <View
-          style={styles.visibilityRow}
-        >
-          <View>
-            <Text
-              style={
-                styles.sectionTitle
-              }
-            >
-              {teamData.visibility ===
-              "public"
-                ? "Public Team"
-                : "Private Team"}
-            </Text>
-
-            <Text
-              style={
-                styles.visibilityText
-              }
-            >
-              {teamData.visibility ===
-              "public"
-                ? "Visible to everyone"
-                : "Invitation only"}
-            </Text>
-          </View>
-
-          <Switch
-            value={
-              teamData.visibility ===
-              "public"
-            }
-            onValueChange={(
-              value
-            ) =>
-              updateField(
-                "visibility",
-                value
-                  ? "public"
-                  : "private"
-              )
-            }
-          />
-        </View>
-      </View>
-
-      {/* CAPTAIN */}
-
-      <View style={styles.card}>
-        <Text style={styles.caption}>
-          CAPTAIN
-        </Text>
-
-        <Text
-          style={styles.captainName}
-        >
-          {user?.fullName ||
-            "Current User"}
-        </Text>
-
-        <Text
-          style={styles.captainSub}
-        >
-          Team Creator
-        </Text>
-      </View>
-
-      {/* INFO */}
-
-      <View style={styles.infoCard}>
-        <Ionicons
-          name="information-circle"
-          size={24}
-          color={COLORS.primary}
-        />
-
-        <Text style={styles.infoText}>
-          As Captain, you can manage
-          players, schedule matches,
-          accept challenges and
-          manage team settings.
-        </Text>
-      </View>
-
-      {/* BUTTON */}
-
-      <PrimaryButton
-        title="Continue To Add Players"
+      <TeamBottomActionBar
+        loading={loading}
+        title="Continue to Add Players"
         onPress={handleContinue}
       />
-
-      <View
-        style={{ height: 40 }}
-      />
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -342,171 +135,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
 
-    backgroundColor:
-      COLORS.background,
-
-    padding: 16,
+    backgroundColor: COLORS.background,
   },
 
-  logoSection: {
-    alignItems: "center",
+  content: {
+    padding: 20,
 
-    marginBottom: 24,
-  },
-
-  logoContainer: {
-    width: 120,
-
-    height: 120,
-
-    borderRadius: 60,
-
-    borderWidth: 2,
-
-    borderStyle: "dashed",
-
-    borderColor: "#CCC",
-
-    justifyContent: "center",
-
-    alignItems: "center",
-  },
-
-  uploadText: {
-    marginTop: 8,
-
-    color: "#777",
-  },
-
-  logoHint: {
-    marginTop: 8,
-
-    color: "#999",
-  },
-
-  card: {
-    backgroundColor: "#FFF",
-
-    borderRadius: 12,
-
-    padding: 16,
-
-    marginBottom: 16,
-  },
-
-  sectionTitle: {
-    fontSize: 16,
-
-    fontWeight: "700",
-
-    marginBottom: 12,
-  },
-
-  input: {
-    borderWidth: 1,
-
-    borderColor: "#DDD",
-
-    borderRadius: 10,
-
-    paddingHorizontal: 12,
-
-    height: 50,
-
-    marginBottom: 12,
-  },
-
-  chipsContainer: {
-    flexDirection: "row",
-
-    flexWrap: "wrap",
-  },
-
-  chip: {
-    paddingHorizontal: 16,
-
-    paddingVertical: 10,
-
-    borderRadius: 30,
-
-    borderWidth: 1,
-
-    borderColor: "#DDD",
-
-    marginRight: 8,
-
-    marginBottom: 8,
-  },
-
-  activeChip: {
-    backgroundColor:
-      COLORS.primary,
-
-    borderColor:
-      COLORS.primary,
-  },
-
-  chipText: {
-    color: "#555",
-  },
-
-  activeChipText: {
-    color: "#FFF",
-
-    fontWeight: "700",
-  },
-
-  visibilityRow: {
-    flexDirection: "row",
-
-    justifyContent:
-      "space-between",
-
-    alignItems: "center",
-  },
-
-  visibilityText: {
-    color: "#888",
-  },
-
-  caption: {
-    fontSize: 12,
-
-    color: "#888",
-
-    marginBottom: 4,
-  },
-
-  captainName: {
-    fontSize: 18,
-
-    fontWeight: "700",
-  },
-
-  captainSub: {
-    color: "#777",
-
-    marginTop: 4,
-  },
-
-  infoCard: {
-    flexDirection: "row",
-
-    backgroundColor:
-      "#EEF8EE",
-
-    borderRadius: 12,
-
-    padding: 16,
-
-    marginBottom: 20,
-  },
-
-  infoText: {
-    flex: 1,
-
-    marginLeft: 10,
-
-    color: "#555",
+    paddingBottom: 120,
   },
 });

@@ -5,8 +5,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { restoreToken } from "./../../features/auth/store/authSlice";
 import AuthNavigator from "./AuthNavigator";
-import MainNavigator from "./MainNavigator";
 import { COLORS } from "./../../constants/colors";
+import RootNavigator from "./RootNavigator";
+import { SidebarProvider } from "../../context/SidebarContext";
+import Sidebar from "../../components/common/Sidebar";
+import { navigationRef } from "./navigationRef";
 
 export default function AppNavigator() {
   const dispatch = useDispatch();
@@ -73,12 +76,16 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
-      {token ? (
-        <MainNavigator />
-      ) : (
-        <AuthNavigator />
-      )}
+    <NavigationContainer ref={navigationRef}>
+      <SidebarProvider>
+        {token ? (
+          <RootNavigator />
+        ) : (
+          <AuthNavigator />
+        )}
+
+        <Sidebar />
+      </SidebarProvider>
     </NavigationContainer>
   );
 }

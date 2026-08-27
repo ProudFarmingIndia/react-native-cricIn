@@ -7,50 +7,67 @@ import {
   StyleSheet,
 } from "react-native";
 
-export default function MatchControls({
-  onExtras,
-  onOverEnd,
-  onUndo,
-}) {
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+import { COLORS } from "../../../constants/colors";
+
+export default function MatchControls({ onUndo, onTransfer, canUndo = true }) {
   return (
     <View style={styles.row}>
       <TouchableOpacity
-        style={styles.button}
-        onPress={onExtras}
-      >
-        <Text>Extras</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={onOverEnd}
-      >
-        <Text>Over End</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.button}
+        style={[styles.button, !canUndo && styles.buttonDisabled]}
+        activeOpacity={0.75}
+        disabled={!canUndo}
         onPress={onUndo}
       >
-        <Text>Undo</Text>
+        <Ionicons name="arrow-undo" size={16} color={COLORS.onSurfaceVariant} />
+        <Text style={styles.buttonText}>Undo Last Ball</Text>
       </TouchableOpacity>
+
+      {onTransfer && (
+        <TouchableOpacity
+          style={[styles.button, styles.transferButton]}
+          activeOpacity={0.75}
+          onPress={onTransfer}
+        >
+          <Ionicons name="swap-horizontal" size={16} color={COLORS.onSurfaceVariant} />
+          <Text style={styles.buttonText}>Transfer Scoring</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row:{
-    flexDirection:"row",
-    justifyContent:"space-between",
-    marginBottom:12,
+  row: {
+    flexDirection: "row",
+    marginBottom: 12,
+    gap: 8,
   },
 
-  button:{
-    flex:1,
-    backgroundColor:"#fff",
-    padding:12,
-    borderRadius:12,
-    alignItems:"center",
-    marginHorizontal:4,
+  button: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: COLORS.surfaceContainerLowest,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+  },
+
+  transferButton: {
+    borderColor: COLORS.primary,
+  },
+
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+
+  buttonText: {
+    marginLeft: 6,
+    fontWeight: "700",
+    color: COLORS.onSurfaceVariant,
   },
 });

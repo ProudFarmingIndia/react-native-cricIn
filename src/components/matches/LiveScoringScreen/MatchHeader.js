@@ -7,7 +7,15 @@ import {
 
 import { COLORS } from "../../../constants/colors";
 
+const INNINGS_LABEL = {
+  1: "1st Innings",
+  2: "2nd Innings",
+};
+
 export default function MatchHeader({
+  teamAName,
+  teamBName,
+  inningsNumber,
   score,
   wickets,
   overs,
@@ -22,13 +30,13 @@ export default function MatchHeader({
           </Text>
 
           <Text style={styles.match}>
-            Highlanders vs Titans
+            {teamAName && teamBName ? `${teamAName} vs ${teamBName}` : "Match in progress"}
           </Text>
         </View>
 
         <View style={styles.badge}>
           <Text style={styles.badgeText}>
-            2nd Innings
+            {INNINGS_LABEL[inningsNumber] || "Innings"}
           </Text>
         </View>
       </View>
