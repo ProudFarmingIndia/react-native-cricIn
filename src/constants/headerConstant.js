@@ -82,6 +82,14 @@ export const HEADER_CONFIG = {
     ShowCricInICon: false,
     showBack: false,
     showSearch: true,
+
+    /*
+    | Switched on when the duplicate MatchesHeader was removed from
+    | MatchesScreen. That component drew a bell, but it had no onPress -
+    | this one actually opens the notification list and carries the
+    | unread badge.
+    */
+    showNotification: true,
   },
 
   GroundsScreen: {
@@ -103,6 +111,63 @@ export const HEADER_CONFIG = {
 
   TeamDetailsScreen: {
     title: "Team Details",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  /*
+  | These had no entry at all, so NavigationHeader fell back to {} and
+  | rendered a blank bar with no title and no back button - on screens you
+  | can only ever reach by navigating into them. EditTeamScreen was the
+  | worst of it: an untitled header above a form identical to Create Team
+  | made it read as the wrong screen entirely.
+  */
+
+  NotificationDetailScreen: {
+    title: "Notification",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  LiveScoringListScreen: {
+    title: "Live Scoring",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  FollowListScreen: {
+    title: "Followers",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  PlayerProfileScreen: {
+    title: "Player Profile",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  EditTeamScreen: {
+    title: "Edit Team",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  ManageViceCaptainScreen: {
+    title: "Vice-Captain",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  TeamAvailabilityScreen: {
+    title: "Availability",
     showMenu: false,
     ShowCricInICon: false,
     showBack: true,

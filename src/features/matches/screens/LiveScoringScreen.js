@@ -29,7 +29,8 @@ import PlayerStats from "../../../components/matches/LiveScoringScreen/PlayerSta
 import ScoringPad from "../../../components/matches/LiveScoringScreen/ScoringPad";
 import MatchControls from "../../../components/matches/LiveScoringScreen/MatchControls";
 import CommentarySection from "../../../components/matches/LiveScoringScreen/CommentarySection";
-import { consumePendingBallResult } from "./WagonWheelModal";
+import { consumePendingBallResult } from "../utils/ballHandoff";
+import { buildCommentaryLine } from "../utils/commentary";
 import useScoring from "../../scoring/hooks/useScoring";
 import {
   getMatchByIdApi,
@@ -45,13 +46,32 @@ export default function LiveScoringScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const {
-    matchId,
-    inningsId,
-    battingSquad = [],
-    bowlingSquad = [],
-    target,
-  } = route.params || {};
+  const { matchId, inningsId, target } = route.params || {};
+
+  /*
+  | The squads are read through useMemo rather than destructured with an
+  | `= []` default.
+  |
+  | A bare default creates a NEW empty array on every render. That array
+  | feeds squadPool -> resolvePlayerName -> afterBall -> the focus effect's
+  | dependency list, so the effect re-ran on every render and fetched the
+  | innings again - whose response re-rendered, which re-ran the effect. An
+  | unbounded refetch loop, one request per response, for as long as the
+  | screen was open.
+  |
+  | Memoising on the params themselves gives a stable identity when nothing
+  | has actually changed.
+  */
+
+  const battingSquad = useMemo(
+    () => route.params?.battingSquad || [],
+    [route.params?.battingSquad],
+  );
+
+  const bowlingSquad = useMemo(
+    () => route.params?.bowlingSquad || [],
+    [route.params?.bowlingSquad],
+  );
 
   const {
     currentInnings,
@@ -64,12 +84,6 @@ export default function LiveScoringScreen() {
     endInnings,
   } = useScoring();
 
-  /*
-  |--------------------------------------------------------------------------
-  | Local State
-  |--------------------------------------------------------------------------
-  */
-
   const [extraPicker, setExtraPicker] = useState(null);
   const [nextBowlerPicker, setNextBowlerPicker] = useState(false);
   const [pendingBowlerId, setPendingBowlerId] = useState(null);
@@ -77,41 +91,40 @@ export default function LiveScoringScreen() {
   const [transferPicker, setTransferPicker] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [match, setMatch] = useState(null);
+  
 
   /*
-  |--------------------------------------------------------------------------
-  | FIX: ballsRef — always the freshest ball list
-  |--------------------------------------------------------------------------
+  | `balls` is the render-time truth; ballsRef exists only so callbacks that
+  | are not re-created (afterBall) can read the latest list.
+  |
+  | The ref used to be the source for the commentary, the batting and
+  | bowling figures and the undo button too - all read during render. A ref
+  | assigned in an effect is one render BEHIND, so opening the screen on a
+  | match already in progress showed the right score above an empty
+  | commentary panel, both batters on 0 (0), and a disabled Undo, until some
+  | unrelated state change forced a second render.
+  |
+  | Assigning during render keeps the ref current for the callbacks without
+  | waiting for the effect to run.
   */
 
   const ballsRef = useRef(balls);
 
-  useEffect(() => {
-    ballsRef.current = balls;
-  }, [balls]);
+  ballsRef.current = balls;
 
-  /*
-  |--------------------------------------------------------------------------
-  | FIX: consumedBallResultRef — guards against re-processing the same
-  | __ballResult handed back via route params (WagonWheelModal /
-  | WicketDismissalModal navigate back to this screen by name).
-  |--------------------------------------------------------------------------
-  */
+  // Everything rendered reads this, never the ref.
+  const ballList = balls || [];
 
-  const consumedBallResultRef = useRef(null);
+  const loadInnings = useCallback(() => {
+    console.log("[LiveScoring] loadInnings called", { inningsId });
+    if (inningsId) getInningsScorecard(inningsId);
+  }, [inningsId, getInningsScorecard]);
 
   useEffect(() => {
     if (!matchId) return;
 
     getMatchByIdApi(matchId)
       .then((data) => {
-        console.log("[LiveScoring] getMatchByIdApi resolved", {
-          overs: data?.overs,
-          teamA: data?.teamA?.teamName,
-          teamB: data?.teamB?.teamName,
-          teamASquadLen: data?.teamASquad?.length,
-          teamBSquadLen: data?.teamBSquad?.length,
-        });
         setMatch(data);
         setTotalOvers(data?.overs || 20);
       })
@@ -120,117 +133,6 @@ export default function LiveScoringScreen() {
       });
   }, [matchId]);
 
-  const loadInnings = useCallback(() => {
-    console.log("[LiveScoring] loadInnings called", { inningsId });
-    if (inningsId) getInningsScorecard(inningsId);
-  }, [inningsId, getInningsScorecard]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadInnings();
-    }, [loadInnings]),
-  );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Derived Display State
-  |--------------------------------------------------------------------------
-  */
-
-  const regionName = (angle) => {
-    if (angle == null) return "";
-    const REGIONS = [
-      { max: 22.5, name: "Long On" },
-      { max: 67.5, name: "Mid Wicket" },
-      { max: 112.5, name: "Square Leg" },
-      { max: 157.5, name: "Fine Leg" },
-      { max: 202.5, name: "Third Man" },
-      { max: 247.5, name: "Point" },
-      { max: 292.5, name: "Cover" },
-      { max: 337.5, name: "Long Off" },
-      { max: 360.01, name: "Long On" },
-    ];
-    const r = REGIONS.find((x) => angle <= x.max);
-    return r ? r.name : "Long On";
-  };
-
-  const commentaryText = (b) => {
-    if (b.commentaryText) return b.commentaryText;
-
-    const batsman = resolvePlayerName(b.batsmanId, battingSquad);
-    const bowler = resolvePlayerName(b.bowlerId, bowlingSquad);
-    const region = regionName(b.wagonWheel?.angle);
-    const shot = b.shotType || "plays a shot";
-
-    // ── Wickets ───────────────────────────────────────────────────
-    if (b.isWicket) {
-      const rawType = b.wicketType || "Dismissal";
-      // Normalize: "Caught (Name)" / "Run Out (Name)" / "LBW" → "caught" / "runout" / "lbw"
-      const type = rawType
-        .toLowerCase()
-        .replace(/\(.*?\)/g, "")
-        .replace(/\s+/g, "");
-
-      // FIX: the fielder is a member of the FIELDING (bowling) team.
-      const fielder = b.fielderId
-        ? resolvePlayerName(b.fielderId, bowlingSquad)
-        : null;
-
-      if (type === "caught" && fielder) {
-        return `OUT! **${batsman}** is caught by **${fielder}** off the bowling of **${bowler}**.`;
-      }
-      if (type === "runout" && fielder) {
-        return `OUT! **${batsman}** is run out by **${fielder}**. What a direct hit!`;
-      }
-      if (type === "stumped" && fielder) {
-        return `OUT! **${batsman}** is stumped by **${fielder}** off **${bowler}**.`;
-      }
-      if (type === "lbw") {
-        return `OUT! **${batsman}** is trapped LBW by **${bowler}**.`;
-      }
-      if (type === "bowled") {
-        return `OUT! **${bowler}** bowls **${batsman}**! Timber!`;
-      }
-      return `OUT! **${batsman}** is dismissed — ${rawType}. Bowled by **${bowler}**.`;
-    }
-
-    // ── Extras ────────────────────────────────────────────────────
-    if (b.extraType === "wide") {
-      return `**WIDE** bowled by **${bowler}**${b.runs ? `, ${b.runs} run${b.runs !== 1 ? "s" : ""} added` : ""}.`;
-    }
-    if (b.extraType === "noBall") {
-      return `**NO BALL** by **${bowler}**${b.runs ? `, **${batsman}** helps himself to ${b.runs} run${b.runs !== 1 ? "s" : ""}` : ""}. Free hit coming up!`;
-    }
-    if (b.extraType === "bye") {
-      return `**BYE** — ${b.runs} run${b.runs !== 1 ? "s" : ""} taken. The keeper misses it.`;
-    }
-    if (b.extraType === "legBye") {
-      return `**LEG BYE** — ${b.runs} run${b.runs !== 1 ? "s" : ""} off the pads.`;
-    }
-
-    // ── Runs off the bat ──────────────────────────────────────────
-    if (b.runs === 0) {
-      return `Dot ball. **${bowler}** to **${batsman}**, no run.`;
-    }
-    if (b.runs === 4) {
-      return `**FOUR!** **${batsman}** ${shot} to ${region}. Lovely timing!`;
-    }
-    if (b.runs === 6) {
-      return `**SIX!** **${batsman}** launches it over ${region}. That's huge!`;
-    }
-    return `**${b.runs} run${b.runs !== 1 ? "s" : ""}** — **${batsman}** ${shot} to ${region}.`;
-  };
-
-  const overs = currentInnings
-    ? `${Math.floor(currentInnings.balls / 6)}.${currentInnings.balls % 6}`
-    : "0.0";
-
-  const currentRunRate =
-    currentInnings?.balls > 0
-      ? (currentInnings.totalRuns / (currentInnings.balls / 6)).toFixed(2)
-      : 0;
-
-  // Combined pool from route params + the match squads LiveScoringScreen loads itself.
   const squadPool = useMemo(
     () => [
       ...battingSquad,
@@ -245,12 +147,10 @@ export default function LiveScoringScreen() {
     (player, squad) => {
       if (!player) return "Select Player";
 
-      // Populated object from the backend — has playerName directly.
       if (typeof player === "object" && player.playerName) {
         return player.playerName;
       }
 
-      // Raw ObjectId string — look it up in the squad, then the match pool.
       const id = player?._id || player;
       const pool = squad?.length ? squad : squadPool;
       return (
@@ -260,6 +160,77 @@ export default function LiveScoringScreen() {
     },
     [squadPool],
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Commentary
+  |--------------------------------------------------------------------------
+  |
+  | The sentence itself is built in features/matches/utils/commentary.js and
+  | shared with the match's Live tab, so the scorer and a spectator read the
+  | same words for the same delivery.
+  |
+  | It used to be written inline here, which is exactly why the Live tab had
+  | no commentary text at all - there was nothing there to reuse.
+  |
+  | This screen supplies only what the shared builder cannot know: how to
+  | turn a bare player id into a name using the squads it has loaded.
+  */
+
+  const commentaryLine = (b) =>
+    buildCommentaryLine(b, {
+      resolveBatsman: (v) => resolvePlayerName(v, battingSquad),
+      resolveBowler: (v) => resolvePlayerName(v, bowlingSquad),
+      resolveFielder: (v) => resolvePlayerName(v, bowlingSquad),
+    }) ||
+    b.commentaryText ||
+    "";
+
+
+
+  const overs = currentInnings
+    ? `${Math.floor(currentInnings.balls / 6)}.${currentInnings.balls % 6}`
+    : "0.0";
+
+  const currentRunRate =
+    currentInnings?.balls > 0
+      ? (currentInnings.totalRuns / (currentInnings.balls / 6)).toFixed(2)
+      : 0;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Which Side Is Which
+  |--------------------------------------------------------------------------
+  |
+  | The innings knows its batting and bowling team; the match knows the two
+  | teams' names. Joining them is what turns "28/1" into "Nav Chetna society
+  | 28/1", which is the difference between a number and a score.
+  |
+  | Left undefined when the innings' team matches neither side loaded here -
+  | the header then falls back to the fixture line rather than guessing.
+  */
+
+  const battingTeamId = String(
+    currentInnings?.battingTeam?._id || currentInnings?.battingTeam || "",
+  );
+
+  const teamAIsBatting =
+    !!battingTeamId && String(match?.teamA?._id) === battingTeamId;
+
+  const teamBIsBatting =
+    !!battingTeamId && String(match?.teamB?._id) === battingTeamId;
+
+  const battingTeamName = teamAIsBatting
+    ? match?.teamA?.teamName
+    : teamBIsBatting
+      ? match?.teamB?.teamName
+      : undefined;
+
+  const bowlingTeamName = teamAIsBatting
+    ? match?.teamB?.teamName
+    : teamBIsBatting
+      ? match?.teamA?.teamName
+      : undefined;
 
   const strikerName = resolvePlayerName(
     currentInnings?.currentStrikerId,
@@ -273,12 +244,6 @@ export default function LiveScoringScreen() {
     currentInnings?.currentBowlerId,
     bowlingSquad,
   );
-
-  /*
-  |--------------------------------------------------------------------------
-  | FIX: transferTargets — robust + deduped
-  |--------------------------------------------------------------------------
-  */
 
   const transferTargets = (() => {
     const seen = new Set();
@@ -298,14 +263,8 @@ export default function LiveScoringScreen() {
     });
   })();
 
-  /*
-  |--------------------------------------------------------------------------
-  | Live Player Figures (derived from ball log)
-  |--------------------------------------------------------------------------
-  */
-
   const battingFigures = (playerId) => {
-    const playerBalls = ballsRef.current.filter(
+    const playerBalls = ballList.filter(
       (b) => (b.batsmanId?._id || b.batsmanId) === playerId,
     );
 
@@ -321,7 +280,7 @@ export default function LiveScoringScreen() {
   };
 
   const bowlingFigures = (playerId) => {
-    const playerBalls = ballsRef.current.filter(
+    const playerBalls = ballList.filter(
       (b) => (b.bowlerId?._id || b.bowlerId) === playerId,
     );
 
@@ -339,16 +298,22 @@ export default function LiveScoringScreen() {
     };
   };
 
-  const commentary = ballsRef.current
+  /*
+  | The WHOLE ball object goes through, with over/text added on top.
+  |
+  | This used to map down to just { over, text }, which threw away runs,
+  | isWicket, extraType, shotType and the wagon wheel - so the commentary
+  | row had nothing to colour its badge with and rendered "undefined".
+  */
+
+  const commentary = ballList
     .slice()
     .reverse()
-    .map((b) => ({ over: `${b.over}.${b.ball}`, text: commentaryText(b) }));
-
-  /*
-  |--------------------------------------------------------------------------
-  | ID Helpers
-  |--------------------------------------------------------------------------
-  */
+    .map((b) => ({
+      ...b,
+      over: `${b.over}.${b.ball}`,
+      text: commentaryLine(b),
+    }));
 
   const strikerId = () =>
     currentInnings?.currentStrikerId?._id || currentInnings?.currentStrikerId;
@@ -360,14 +325,8 @@ export default function LiveScoringScreen() {
   const bowlerId = () =>
     currentInnings?.currentBowlerId?._id || currentInnings?.currentBowlerId;
 
-  /*
-  |--------------------------------------------------------------------------
-  | Bowler quota helpers (cricket rule: max overs per bowler)
-  |--------------------------------------------------------------------------
-  */
-
   const oversBowledBy = (playerId) => {
-    const bowlerBalls = ballsRef.current.filter(
+    const bowlerBalls = ballList.filter(
       (b) =>
         (b.bowlerId?._id || b.bowlerId) === playerId &&
         b.isLegalDelivery !== false,
@@ -375,46 +334,57 @@ export default function LiveScoringScreen() {
     return bowlerBalls.length / 6;
   };
 
-  const maxOversPerBowler = Math.floor(totalOvers / 5); // 4 in T20, 10 in 50-over
-
   /*
-  |--------------------------------------------------------------------------
-  | afterBall — runs after EVERY delivered ball
-  |--------------------------------------------------------------------------
+  | One fifth of the innings, but never zero.
+  |
+  | Math.floor(4 / 5) is 0, so in any match under five overs EVERY bowler
+  | failed the `oversBowled < max` test: the eligible-bowler list came back
+  | empty, "Start Next Over" could never be enabled, and the scorer was
+  | stuck on the over summary with no way forward.
   */
+
+  const maxOversPerBowler = Math.max(1, Math.floor(totalOvers / 5));
 
   const afterBall = useCallback(
     async (result) => {
       console.log("[afterBall] ENTERED", {
         success: result?.success,
         error: result?.error,
-        data: result?.data,
       });
 
-      if (!result.success) {
-        Alert.alert("Failed", result.error || "Could not record that ball.");
+      if (!result || !result.success) {
+        Alert.alert("Failed", result?.error || "Could not record that ball.");
         return;
       }
 
-      const updatedInnings = result.data.innings;
-      const lastBall = result.data.ball;
+      const data = result.data;
+      if (!data || !data.innings) {
+        console.log("[afterBall] missing data.innings — refreshing from server");
+        loadInnings();
+        return;
+      }
 
+      const updatedInnings = data.innings;
+      const lastBall = data.ball;
       const totalBalls = totalOvers * 6;
 
-      // ── Condition 1: Target achieved (2nd innings only) ────────────────
-      const isTargetAchieved =
-        target != null && updatedInnings.totalRuns >= target;
+      /*
+      | The server now decides whether the innings is over and says so on
+      | the response: inningsComplete, with targetReached / allOut /
+      | oversExhausted broken out.
+      |
+      | It is trusted first because it knows things this screen may not: the
+      | real squad size, the first innings' total, and the true ball count.
+      | The local checks stay as a fallback for an older server build.
+      |
+      | The old all-out test was `battingSquad.length > 0 && ...`, which
+      | means a screen that had lost its squad params could never detect
+      | all out at all - it just silently kept scoring.
+      */
 
-      console.log("[afterBall] conditions", {
-        isTargetAchieved,
-        target,
-        totalRuns: updatedInnings.totalRuns,
-        wickets: updatedInnings.wickets,
-        balls: updatedInnings.balls,
-        totalBalls,
-        overCompleted: result.data.overCompleted,
-        battingSquadLen: battingSquad.length,
-      });
+      const isTargetAchieved =
+        data.targetReached ??
+        (target != null && updatedInnings.totalRuns >= target);
 
       if (isTargetAchieved) {
         await endInnings(inningsId);
@@ -422,11 +392,13 @@ export default function LiveScoringScreen() {
         return;
       }
 
-      // ── Condition 2 & 3: All out or overs complete ────────────────────
       const isAllOut =
-        battingSquad.length > 0 &&
-        updatedInnings.wickets >= battingSquad.length - 1;
-      const isOversComplete = updatedInnings.balls >= totalBalls;
+        data.allOut ??
+        (battingSquad.length > 0 &&
+          updatedInnings.wickets >= battingSquad.length - 1);
+
+      const isOversComplete =
+        data.oversExhausted ?? updatedInnings.balls >= totalBalls;
 
       if (isAllOut || isOversComplete) {
         await endInnings(inningsId);
@@ -440,18 +412,14 @@ export default function LiveScoringScreen() {
           battingTeamId: updatedInnings.battingTeam,
           bowlingTeamId: updatedInnings.bowlingTeam,
         });
-
         return;
       }
 
-      // ── Over completed (not innings-end) ─────────────────────────────
-      if (result.data.overCompleted) {
-        console.log(
-          "[afterBall] OVER COMPLETED — navigating to OverSummaryScreen",
-        );
+      if (data.overCompleted) {
+        console.log("[afterBall] OVER COMPLETED — preparing OverSummary payload");
 
         const overBalls = (() => {
-          const current = ballsRef.current;
+          const current = ballsRef.current || [];
           const inOver = current.filter((b) => b.over === lastBall.over);
           const hasLast = inOver.some((b) => b._id === lastBall._id);
           return hasLast ? inOver : [...inOver, lastBall];
@@ -459,10 +427,9 @@ export default function LiveScoringScreen() {
 
         const figuresFor = (player) => {
           const playerId = player?._id || player;
-          const playerBalls = ballsRef.current.filter(
+          const playerBalls = (ballsRef.current || []).filter(
             (b) => (b.batsmanId?._id || b.batsmanId) === playerId,
           );
-
           return {
             playerName: resolvePlayerName(player, battingSquad),
             runs: playerBalls.reduce(
@@ -480,7 +447,7 @@ export default function LiveScoringScreen() {
         const bowlerFigures = (() => {
           const currentBowler = updatedInnings.currentBowlerId;
           const currentBowlerId = currentBowler?._id || currentBowler;
-          const bowlerBalls = ballsRef.current.filter(
+          const bowlerBalls = (ballsRef.current || []).filter(
             (b) => (b.bowlerId?._id || b.bowlerId) === currentBowlerId,
           );
           const legalBalls = bowlerBalls.filter(
@@ -490,8 +457,7 @@ export default function LiveScoringScreen() {
           const maidenOvers = (() => {
             const byOver = {};
             bowlerBalls.forEach((b) => {
-              byOver[b.over] =
-                (byOver[b.over] || 0) + (b.teamRuns ?? b.runs ?? 0);
+              byOver[b.over] = (byOver[b.over] || 0) + (b.teamRuns ?? b.runs ?? 0);
             });
             return Object.values(byOver).filter((r) => r === 0).length;
           })();
@@ -511,7 +477,6 @@ export default function LiveScoringScreen() {
         const ballsUsed = updatedInnings.balls;
         const ballsLeft = Math.max(0, totalBalls - ballsUsed);
 
-        // ── Bowling team squad for the next-bowler picker ─────────────
         const bowlingTeamId =
           updatedInnings.bowlingTeam?._id || updatedInnings.bowlingTeam;
         const teamAId = match?.teamA?._id;
@@ -523,25 +488,28 @@ export default function LiveScoringScreen() {
           normalizePlayer,
         );
 
-        console.log("[afterBall] bowlingPool for picker", {
-          bowlingTeamId,
-          teamAId,
-          rawPoolLen: rawPool.length,
-          bowlingPoolLen: bowlingPool.length,
-          bowlingPoolNames: bowlingPool.map((p) => p.playerName),
-        });
-
-        // Bowler who just finished the over (from the last ball).
         const lastBowlerId = lastBall.bowlerId?._id || lastBall.bowlerId;
 
-        // Overs bowled by each player (in balls), for quota filtering.
         const oversBowledByMap = {};
-        ballsRef.current.forEach((b) => {
+        (ballsRef.current || []).forEach((b) => {
           const pid = b.bowlerId?._id || b.bowlerId;
           if (pid && b.isLegalDelivery !== false) {
             oversBowledByMap[pid] = (oversBowledByMap[pid] || 0) + 1;
           }
         });
+
+        console.log("[afterBall] navigating to OverSummary", {
+          inningsId,
+          lastBowlerId,
+          bowlingPoolLen: bowlingPool.length,
+          overBallsLen: overBalls.length,
+        });
+
+        if (!inningsId) {
+          console.warn("[afterBall] Missing inningsId — aborting OverSummary navigation");
+          loadInnings();
+          return;
+        }
 
         navigation.navigate("OverSummaryScreen", {
           score: updatedInnings.totalRuns,
@@ -563,22 +531,21 @@ export default function LiveScoringScreen() {
           striker: figuresFor(updatedInnings.currentStrikerId),
           nonStriker: figuresFor(updatedInnings.currentNonStrikerId),
           bowler: bowlerFigures,
-          // ── New: next-bowler selection data ──────────────────────
           matchId,
           inningsId,
           bowlingPool,
           lastBowlerId,
-          maxOversPerBowler: Math.floor(totalOvers / 5),
+          maxOversPerBowler,
           oversBowledBy: oversBowledByMap,
         });
-      } else {
-        console.log(
-          "[afterBall] ball recorded, no over-complete. balls now:",
-          updatedInnings.balls,
-        );
+        return;
       }
+
+      console.log("[afterBall] ball recorded, refreshing innings state");
+      loadInnings();
     },
     [
+      maxOversPerBowler,
       inningsId,
       matchId,
       battingSquad,
@@ -589,74 +556,79 @@ export default function LiveScoringScreen() {
       navigation,
       match,
       resolvePlayerName,
+      loadInnings,
     ],
   );
 
   /*
-  |--------------------------------------------------------------------------
-  | __ballResult relay
-  |--------------------------------------------------------------------------
+  | On focus: take a delivery handed over by one of the modals if there is
+  | one, otherwise refresh from the server.
   |
-  | FIX: WagonWheelModal and WicketDismissalModal both navigate back to this
-  | screen BY NAME with { __ballResult: result }. We consume it here (guarded
-  | by a ref so the same result is never processed twice), and keep the legacy
-  | module-variable handoff as a fallback.
-  |--------------------------------------------------------------------------
+  | There used to be TWO sources here - a __ballResult route param and the
+  | handoff module - with a ref guarding the param against double
+  | consumption. The param is gone (it was destroying the screen's other
+  | params on the way in; see utils/ballHandoff.js), so there is one source,
+  | it clears itself as it is read, and the guard is no longer needed.
   */
 
   useFocusEffect(
     useCallback(() => {
-      const paramResult = route.params?.__ballResult;
+      const pending = consumePendingBallResult();
 
-      if (paramResult && consumedBallResultRef.current !== paramResult) {
-        consumedBallResultRef.current = paramResult;
-        console.log("[LiveScoring] consuming __ballResult", paramResult);
-        afterBall(paramResult);
+      if (pending) {
+        afterBall(pending);
         return;
       }
 
-      const pending = consumePendingBallResult();
-      if (pending) {
-        console.log("[LiveScoring] consuming pendingBallResult", pending);
-        afterBall(pending);
-      }
-    }, [afterBall, route.params?.__ballResult]),
+      loadInnings();
+    }, [afterBall, loadInnings]),
   );
 
   /*
-  |--------------------------------------------------------------------------
-  | Handlers
-  |--------------------------------------------------------------------------
+  | One delivery at a time.
+  |
+  | Nothing guarded a second tap: two taps on Wide posted two balls, and the
+  | server processed both from the same stale innings snapshot - the totals
+  | survived ($inc is atomic) but the crease did not, because both requests
+  | computed the new striker from the same starting pair. Two singles ended
+  | up swapping the batters once instead of twice.
   */
 
+  const submittingRef = useRef(false);
+
+  const withSubmitLock = async (fn) => {
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
+
+    try {
+      await fn();
+    } finally {
+      submittingRef.current = false;
+    }
+  };
+
+  const hasCrease = () => {
+    if (strikerId() && bowlerId()) return true;
+
+    Alert.alert("Select Players", "Set the current striker and bowler first.");
+
+    return false;
+  };
+
   const handleRun = async (runs) => {
-    console.log("[LiveScoring] handleRun", {
-      runs,
-      striker: strikerId(),
-      bowler: bowlerId(),
-    });
+    if (!hasCrease()) return;
 
-    if (!strikerId() || !bowlerId()) {
-      Alert.alert(
-        "Select Players",
-        "Set the current striker and bowler first.",
-      );
-      return;
-    }
-
-    if (runs === 0) {
-      const result = await addBall({
-        matchId,
-        inningsId,
-        batsmanId: strikerId(),
-        bowlerId: bowlerId(),
-        runs: 0,
-      });
-
-      console.log("[LiveScoring] addBall (dot) result", result);
-      afterBall(result);
-      return;
-    }
+    /*
+    | Dot balls used to skip straight to addBall, which meant a third of a
+    | typical innings was recorded with no shot and no direction - and then
+    | read back as a bare "no run" in the commentary.
+    |
+    | A dot is a delivery like any other: the batter still played at it and
+    | it still went somewhere. It now takes the same shot -> direction path
+    | as every other ball, so the commentary and the wagon wheel are
+    | complete rather than complete-except-for-dots.
+    */
 
     navigation.navigate("ShotSelectionModal", {
       matchId,
@@ -667,28 +639,38 @@ export default function LiveScoringScreen() {
     });
   };
 
+  /*
+  | Extras used to skip both of the guards the run buttons have: no check
+  | that a striker and bowler were set (so an innings with no bowler yet
+  | posted undefined ids and got a server rejection instead of the clear
+  | "set the striker and bowler first"), and no lock against a second tap.
+  */
+
   const handleExtraRuns = async (runs) => {
     const extraType = extraPicker;
+
     setExtraPicker(null);
 
-    console.log("[LiveScoring] handleExtraRuns", { runs, extraType });
+    if (!hasCrease()) return;
 
-    const result = await addBall({
-      matchId,
-      inningsId,
-      batsmanId: strikerId(),
-      bowlerId: bowlerId(),
-      runs,
-      extraType,
-      isFreeHit: extraType === "noBall",
+    await withSubmitLock(async () => {
+      const result = await addBall({
+        matchId,
+        inningsId,
+        batsmanId: strikerId(),
+        bowlerId: bowlerId(),
+        runs,
+        extraType,
+        isFreeHit: extraType === "noBall",
+      });
+
+      await afterBall(result);
     });
-
-    console.log("[LiveScoring] addBall (extra) result", result);
-    afterBall(result);
   };
 
   const handleWicket = () => {
-    console.log("[LiveScoring] handleWicket");
+    if (!hasCrease()) return;
+
     navigation.navigate("WicketDismissalModal", {
       matchId,
       inningsId,
@@ -701,8 +683,7 @@ export default function LiveScoringScreen() {
   };
 
   const handleConfirmNextBowler = async () => {
-    console.log("[LiveScoring] handleConfirmNextBowler", { pendingBowlerId });
-
+    console.log("[LiveScoring] handleConfirmNextBowler", { pendingBowlerId, inningsId });
     if (!pendingBowlerId) return;
 
     const chosenBowlerId = pendingBowlerId;
@@ -710,16 +691,24 @@ export default function LiveScoringScreen() {
     setNextBowlerPicker(false);
     setPendingBowlerId(null);
 
-    const result = await setNextBowler(inningsId, chosenBowlerId);
+    try {
+      const result = await setNextBowler(inningsId, chosenBowlerId);
+      console.log("[LiveScoring] setNextBowler result", result);
 
-    console.log("[LiveScoring] setNextBowler result", result);
+      if (!result) {
+        Alert.alert("Failed", "No response from server.");
+        return;
+      }
+      if (result.success === false || result.error) {
+        Alert.alert("Failed", result.error || "Could not set the next bowler.");
+        return;
+      }
 
-    if (!result.success) {
-      Alert.alert("Failed", result.error || "Could not set the next bowler.");
-      return;
+      loadInnings();
+    } catch (err) {
+      console.error("[LiveScoring] setNextBowler throw", err);
+      Alert.alert("Failed", err?.message || "Could not set the next bowler.");
     }
-
-    loadInnings();
   };
 
   const handleUndo = () => {
@@ -731,14 +720,22 @@ export default function LiveScoringScreen() {
         {
           text: "Undo",
           style: "destructive",
-          onPress: async () => {
-            const result = await undoLastBall(inningsId);
-            console.log("[LiveScoring] undoLastBall result", result);
+          onPress: () =>
+            /*
+            | Under the same lock as recording a ball. Undo is a write to
+            | the same innings, and an undo racing a delivery leaves the
+            | crease derived from two different snapshots.
+            */
+            withSubmitLock(async () => {
+              const result = await undoLastBall(inningsId);
 
-            if (!result.success) {
-              Alert.alert("Failed", result.error || "Nothing to undo.");
-            }
-          },
+              if (!result?.success) {
+                Alert.alert("Failed", result?.error || "Nothing to undo.");
+                return;
+              }
+
+              loadInnings();
+            }),
         },
       ],
     );
@@ -763,7 +760,6 @@ export default function LiveScoringScreen() {
     }
   };
 
-  // The team currently bowling → its squad, for the next-bowler picker.
   const bowlingPool = (() => {
     const bowlingTeamId =
       currentInnings?.bowlingTeam?._id || currentInnings?.bowlingTeam;
@@ -776,12 +772,6 @@ export default function LiveScoringScreen() {
     return pool.map(normalizePlayer);
   })();
 
-  /*
-  |--------------------------------------------------------------------------
-  | Loader
-  |--------------------------------------------------------------------------
-  */
-
   if (loading && !currentInnings) {
     return (
       <View style={styles.loaderContainer}>
@@ -789,12 +779,6 @@ export default function LiveScoringScreen() {
       </View>
     );
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Render
-  |--------------------------------------------------------------------------
-  */
 
   return (
     <ScrollView
@@ -804,11 +788,25 @@ export default function LiveScoringScreen() {
       <MatchHeader
         teamAName={match?.teamA?.teamName}
         teamBName={match?.teamB?.teamName}
+        battingTeamName={battingTeamName}
+        bowlingTeamName={bowlingTeamName}
         inningsNumber={currentInnings?.inningsNumber}
         score={currentInnings?.totalRuns || 0}
         wickets={currentInnings?.wickets || 0}
         overs={overs}
         target={target}
+        runRate={currentRunRate}
+        /*
+        | The scorer gets the same full scorecard everyone else sees,
+        | without leaving the match - MatchDetailsScreen opened on its
+        | Scorecard tab.
+        */
+        onPressScorecard={() =>
+          navigation.navigate("MatchDetailsScreen", {
+            matchId,
+            initialTab: "Scorecard",
+          })
+        }
       />
 
       {target != null && (
@@ -824,9 +822,28 @@ export default function LiveScoringScreen() {
       )}
 
       <PlayerStats
-        striker={{ name: strikerName, ...battingFigures(strikerId()) }}
-        nonStriker={{ name: nonStrikerName, ...battingFigures(nonStrikerId()) }}
-        bowler={{ name: bowlerName, ...bowlingFigures(bowlerId()) }}
+        striker={{
+          id: strikerId(),
+          name: strikerName,
+          ...battingFigures(strikerId()),
+        }}
+        nonStriker={{
+          id: nonStrikerId(),
+          name: nonStrikerName,
+          ...battingFigures(nonStrikerId()),
+        }}
+        bowler={{
+          id: bowlerId(),
+          name: bowlerName,
+          ...bowlingFigures(bowlerId()),
+        }}
+        onChangeBowler={() => setNextBowlerPicker(true)}
+        onPressPlayer={(playerId) =>
+          navigation.navigate("TeamStack", {
+            screen: "PlayerProfileScreen",
+            params: { playerId },
+          })
+        }
       />
 
       <ScoringPad
@@ -838,19 +855,17 @@ export default function LiveScoringScreen() {
       <MatchControls
         onUndo={handleUndo}
         onTransfer={() => setTransferPicker(true)}
-        canUndo={ballsRef.current.length > 0}
+        canUndo={ballList.length > 0}
       />
 
-      <TouchableOpacity
-        style={styles.nextBowlerButton}
-        onPress={() => setNextBowlerPicker(true)}
-      >
-        <Text style={styles.nextBowlerButtonText}>Change Bowler</Text>
-      </TouchableOpacity>
+      {/*
+      | The full-width "Change Bowler" button that used to sit here has
+      | moved onto the bowler's own row in PlayerStats - it changes that
+      | line, so it belongs on it, and between overs it is the control the
+      | scorer reaches for first rather than one to hunt for below the pad.
+      */}
 
       <CommentarySection commentary={commentary} />
-
-      {/* ── Extra Runs Picker ─────────────────────────────────────── */}
 
       <Modal visible={!!extraPicker} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -880,8 +895,6 @@ export default function LiveScoringScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* ── Next Bowler Picker ───────────────────────────────────── */}
 
       <Modal visible={nextBowlerPicker} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -927,8 +940,6 @@ export default function LiveScoringScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* ── Transfer Scoring Picker ─────────────────────────────── */}
 
       <Modal visible={transferPicker} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -1069,18 +1080,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  nextBowlerButton: {
-    backgroundColor: COLORS.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 12,
-  },
 
-  nextBowlerButtonText: {
-    color: COLORS.primary,
-    fontWeight: "700",
-  },
 });

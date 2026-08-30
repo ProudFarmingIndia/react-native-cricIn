@@ -15,6 +15,25 @@ import {
 |--------------------------------------------------------------------------
 */
 
+/*
+| GET /search returns a keyed object - { players, teams, grounds,
+| tournaments } - not a flat array. globalResults was initialised to [],
+| so before the first global search every consumer read
+| globalResults.players off an array and got undefined. Seeding the real
+| shape means the "All" tab renders empty sections instead of throwing on
+| the first frame.
+*/
+
+const emptyGlobalResults = () => ({
+  players: [],
+
+  teams: [],
+
+  grounds: [],
+
+  tournaments: [],
+});
+
 const initialState = {
   players: [],
 
@@ -24,7 +43,7 @@ const initialState = {
 
   tournaments: [],
 
-  globalResults: [],
+  globalResults: emptyGlobalResults(),
 
   loading: false,
 
@@ -64,17 +83,16 @@ export const searchTeams = createAsyncThunk(
     try {
       return await searchTeamsApi(keyword);
     } catch (error) {
-      console.log("==================================");
-      console.log("SEARCH PLAYER API ERROR");
-      console.log("Status :", error.response?.status);
-      console.log("Response :", error.response?.data);
-      console.log("Message :", error.message);
-      console.log("==================================");
+      /*
+      | The message said "Failed to search players." inside the TEAMS
+      | thunk - copy-paste from the block above - so a team search failure
+      | surfaced as a player error on screen.
+      */
 
       return rejectWithValue(
         error.response?.data?.message ||
           error.message ||
-          "Failed to search players.",
+          "Failed to search teams.",
       );
     }
   },
@@ -199,7 +217,7 @@ const searchSlice = createSlice({
       state.teams = [];
       state.grounds = [];
       state.tournaments = [];
-      state.globalResults = [];
+      state.globalResults = emptyGlobalResults();
     },
 
     /*
@@ -213,7 +231,7 @@ const searchSlice = createSlice({
       state.teams = [];
       state.grounds = [];
       state.tournaments = [];
-      state.globalResults = [];
+      state.globalResults = emptyGlobalResults();
 
       state.loading = false;
       state.success = false;
@@ -328,7 +346,10 @@ const searchSlice = createSlice({
 
         state.success = true;
 
-        state.globalResults = action.payload || [];
+        state.globalResults = {
+          ...emptyGlobalResults(),
+          ...(action.payload || {}),
+        };
       });
   },
 });

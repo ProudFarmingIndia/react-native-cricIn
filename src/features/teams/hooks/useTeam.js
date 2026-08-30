@@ -12,7 +12,8 @@ import {
   removePlayerFromTeam,
   leaveTeam,
   setCaptain,
-  setViceCaptain,
+  revokeViceCaptain,
+  updateViceCaptainRights,
   updateTeamStats,
   clearTeamError,
   clearTeamSuccess,
@@ -166,13 +167,47 @@ export default function useTeam() {
     [dispatch],
   );
 
-  const assignViceCaptain = useCallback(
-    async (teamId, viceCaptainId) => {
+  /*
+  |--------------------------------------------------------------------------
+  | Vice-Captain
+  |--------------------------------------------------------------------------
+  |
+  | There is no "assign vice-captain" here on purpose - that is a proposal
+  | the candidate has to accept, and it lives in
+  | features/viceCaptain/services/viceCaptainProposal.service.js.
+  |
+  | Revoking and changing rights ARE direct writes, and ManageViceCaptainScreen
+  | already destructures both of these from this hook. They were missing,
+  | so both "Save Rights" and "Revoke" threw "is not a function".
+  |
+  */
+
+  const revokeTeamViceCaptain = useCallback(
+    async (teamId) => {
+      const result = await dispatch(revokeViceCaptain(teamId));
+
+      if (revokeViceCaptain.fulfilled.match(result)) {
+        return {
+          success: true,
+          data: result.payload,
+        };
+      }
+
+      return {
+        success: false,
+        error: result.payload,
+      };
+    },
+    [dispatch],
+  );
+
+  const updateTeamViceCaptainRights = useCallback(
+    async (teamId, rights) => {
       const result = await dispatch(
-        setViceCaptain({ teamId, viceCaptainId }),
+        updateViceCaptainRights({ teamId, rights }),
       );
 
-      if (setViceCaptain.fulfilled.match(result)) {
+      if (updateViceCaptainRights.fulfilled.match(result)) {
         return {
           success: true,
           data: result.payload,
@@ -243,7 +278,9 @@ export default function useTeam() {
 
     setCaptain: assignCaptain,
 
-    setViceCaptain: assignViceCaptain,
+    revokeViceCaptain: revokeTeamViceCaptain,
+
+    updateViceCaptainRights: updateTeamViceCaptainRights,
 
     updateTeamStats: (teamId) => dispatch(updateTeamStats(teamId)),
 

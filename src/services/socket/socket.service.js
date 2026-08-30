@@ -1,5 +1,7 @@
 import { io } from "socket.io-client";
 
+import { ENV } from "../../config/env";
+
 /*
 |--------------------------------------------------------------------------
 | Socket Service
@@ -12,7 +14,8 @@ import { io } from "socket.io-client";
 |
 */
 
-const SOCKET_URL = "http://192.168.29.86:5000";
+// Same origin as the REST client - see config/env.js.
+const SOCKET_URL = ENV.SOCKET_URL;
 
 let socket = null;
 
@@ -22,10 +25,25 @@ export const connectSocket = (token) => {
     return socket;
   }
 
+  /*
+  | A socket that exists but is mid-reconnect would otherwise be abandoned
+  | here and replaced, leaking its listeners and its retry loop.
+  */
+  if (socket) {
+    socket.removeAllListeners();
+    socket.disconnect();
+    socket = null;
+  }
+
   socket = io(SOCKET_URL, {
     transports: ["websocket"],
+    /*
+    | Handshake auth only. The token was ALSO sent as a query param, which
+    | put the JWT in the connection URL and therefore into server access
+    | logs. The backend reads handshake.auth.token first, so the query copy
+    | bought nothing.
+    */
     auth: token ? { token } : {},
-    query: token ? { token } : {},
     autoConnect: true,
     reconnection: true,
   });
@@ -66,5 +84,3 @@ export const offNotification = () => {
 };
 
 export const getSocket = () => socket;
-
-export default socket;

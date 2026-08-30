@@ -30,46 +30,57 @@ const SIDEBAR_WIDTH = Math.min(300, Dimensions.get("window").width * 0.8);
 */
 
 const MENU_ITEMS = [
+  /*
+  | Add Match and the Home screen's Quick Score button open the SAME
+  | screen - QuickScoreScreen - which carries a Quick / Scheduled toggle.
+  | The two entry points used to be indistinguishable: both landed on the
+  | screen in "quick" mode, so "Add Match" and "Quick Score" did exactly
+  | the same thing.
+  |
+  | Passing the mode is what makes them different. Coming from "Add Match"
+  | the screen opens on Scheduled, which is what the label promises; the
+  | user can still flip the toggle.
+  |
+  | The target is also corrected: QuickScoreFlow moved from inside the
+  | Matches tab up to RootNavigator, so this route no longer resolves
+  | through MainTabs > Matches and this item had stopped working.
+  */
   {
     key: "addMatch",
     label: "Add Match",
     icon: "add-circle-outline",
     navigate: () =>
-      navigateFromRoot("MainTabs", {
-        screen: "Matches",
-        params: {
-          screen: "QuickScoreFlow",
-          params: {
-            screen: "QuickScoreScreen",
-          },
-        },
+      navigateFromRoot("QuickScoreFlow", {
+        screen: "QuickScoreScreen",
+        params: { mode: "scheduled" },
       }),
   },
+  /*
+  | The Matches screen's Teams tab - every team on CricIn, ranked and
+  | filterable. This used to open the PROFILE screen's Teams tab, which is
+  | only the teams you belong to: a different list, and one already a tap
+  | away from the Profile tab.
+  */
   {
     key: "teams",
     label: "Teams",
     icon: "people-outline",
     navigate: () =>
       navigateFromRoot("MainTabs", {
-        screen: "Profile",
-        params: { screen: "ProfileScreen", params: { initialTab: 2 } },
+        screen: "Matches",
+        params: { screen: "MatchesScreen", params: { initialTab: "Teams" } },
       }),
   },
+  /*
+  | A dedicated screen listing the matches in progress that this user can
+  | score. It previously opened the Matches tab - the same destination as
+  | the bottom bar - so the item did nothing the bar did not already do.
+  */
   {
     key: "liveScoring",
     label: "Live Scoring",
     icon: "radio-outline",
-    navigate: () =>
-      navigateFromRoot("MainTabs", {
-        screen: "Matches",
-        params: { screen: "MatchesStack" },
-      }),
-  },
-  {
-    key: "profile",
-    label: "Profile",
-    icon: "person-outline",
-    navigate: () => navigateFromRoot("MainTabs", { screen: "Profile" }),
+    navigate: () => navigateFromRoot("LiveScoringListScreen"),
   },
   {
     key: "createTeam",
@@ -165,23 +176,46 @@ export default function Sidebar() {
           {/* User Header */}
           {/* ---------------------------------------------------------- */}
 
+          {/*
+          | The header card is now the way into your profile, which is why
+          | the separate "Profile" menu item below it is gone - two rows
+          | opening the same screen, one directly above the other, is just
+          | a second thing to read.
+          |
+          | The close button stays outside the touchable so tapping the X
+          | cannot also fire the navigation.
+          */}
+
           <View style={styles.userHeader}>
-            <Image
-              source={{
-                uri: myPlayer?.profileImage?.url || "https://placehold.co/100",
+            <TouchableOpacity
+              style={styles.userHeaderMain}
+              onPress={() => {
+                closeSidebar();
+
+                navigateFromRoot("MainTabs", { screen: "Profile" });
               }}
-              style={styles.avatar}
-            />
+              activeOpacity={0.7}
+            >
+              <Image
+                source={{
+                  uri:
+                    myPlayer?.profileImage?.url || "https://placehold.co/100",
+                }}
+                style={styles.avatar}
+              />
 
-            <View style={styles.userText}>
-              <Text style={styles.userName} numberOfLines={1}>
-                {myPlayer?.playerName || "Your Profile"}
-              </Text>
+              <View style={styles.userText}>
+                <Text style={styles.userName} numberOfLines={1}>
+                  {myPlayer?.playerName || "Your Profile"}
+                </Text>
 
-              {!!authUser?.phone && (
-                <Text style={styles.userPhone}>{authUser.phone}</Text>
-              )}
-            </View>
+                {!!authUser?.phone && (
+                  <Text style={styles.userPhone}>{authUser.phone}</Text>
+                )}
+
+                <Text style={styles.userHint}>View profile</Text>
+              </View>
+            </TouchableOpacity>
 
             <TouchableOpacity onPress={closeSidebar} style={styles.closeButton}>
               <Ionicons
@@ -283,6 +317,19 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     backgroundColor: COLORS.surfaceVariant,
     marginRight: 12,
+  },
+
+  userHeaderMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  userHint: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.primary,
   },
 
   userText: {

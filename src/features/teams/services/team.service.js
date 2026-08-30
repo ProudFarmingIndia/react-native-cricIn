@@ -202,6 +202,76 @@ export const updateTeamStatsApi = async (teamId, payload = {}) => {
   return unwrap(response);
 };
 
+/*
+|--------------------------------------------------------------------------
+| Team Calendar
+|--------------------------------------------------------------------------
+|
+| GET /api/teams/:teamId/calendar?from=&to=
+|
+| Returns [{ date, status: "booked" | "blocked", matchId?, reason? }].
+| "booked" is a scheduled match that day; "blocked" is the team marking
+| itself unavailable.
+|
+| TeamAvailabilityScreen imported this and the two below before they
+| existed, so every calendar read and write threw "is not a function".
+| The backend routes were there the whole time.
+|
+*/
+
+export const getTeamCalendarApi = async (teamId, from, to) => {
+  const params = {};
+
+  if (from) params.from = from;
+  if (to) params.to = to;
+
+  const response = await apiClient.get(ENDPOINTS.TEAM.CALENDAR(teamId), {
+    params,
+  });
+
+  return unwrap(response);
+};
+
+/*
+|--------------------------------------------------------------------------
+| Block Date
+|--------------------------------------------------------------------------
+|
+| POST /api/teams/:teamId/block-date  { date, reason? }
+|
+| The backend refuses a date that already has an upcoming or live match,
+| so let the caller surface the returned message rather than swallowing it.
+|
+*/
+
+export const blockDateApi = async (teamId, date, reason = "") => {
+  const response = await apiClient.post(ENDPOINTS.TEAM.BLOCK_DATE(teamId), {
+    date,
+    reason,
+  });
+
+  return unwrap(response);
+};
+
+/*
+|--------------------------------------------------------------------------
+| Unblock Date
+|--------------------------------------------------------------------------
+|
+| DELETE /api/teams/:teamId/block-date/:date
+|
+| The date travels as a path segment, so it has to be encoded - an
+| unencoded ISO string carries characters that break routing.
+|
+*/
+
+export const unblockDateApi = async (teamId, date) => {
+  const response = await apiClient.delete(
+    ENDPOINTS.TEAM.UNBLOCK_DATE(teamId, encodeURIComponent(date)),
+  );
+
+  return response.data;
+};
 
 /*
 |--------------------------------------------------------------------------

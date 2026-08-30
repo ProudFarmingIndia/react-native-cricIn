@@ -4,6 +4,7 @@ import {
   View,
   Text,
   Image,
+  ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
 } from "react-native";
@@ -12,9 +13,22 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 
 import { COLORS } from "../../../constants/colors";
 
+/*
+|--------------------------------------------------------------------------
+| TeamLogoUploader
+|--------------------------------------------------------------------------
+|
+| props:
+|   logo       - display URL of the current logo, or null
+|   onPress    - open the picker
+|   uploading  - swap the circle for a spinner while the upload runs
+|
+*/
+
 export default function TeamLogoUploader({
   logo,
   onPress,
+  uploading = false,
 }) {
   return (
     <View style={styles.container}>
@@ -22,8 +36,11 @@ export default function TeamLogoUploader({
         activeOpacity={0.8}
         style={styles.logoButton}
         onPress={onPress}
+        disabled={uploading}
       >
-        {logo ? (
+        {uploading ? (
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        ) : logo ? (
           <Image
             source={{
               uri: logo,
@@ -44,21 +61,19 @@ export default function TeamLogoUploader({
           </>
         )}
 
-        <View style={styles.addIcon}>
-          <Ionicons
-            name={
-              logo
-                ? "create-outline"
-                : "add"
-            }
-            size={18}
-            color="#FFF"
-          />
-        </View>
+        {!uploading && (
+          <View style={styles.addIcon}>
+            <Ionicons
+              name={logo ? "create-outline" : "add"}
+              size={18}
+              color="#FFF"
+            />
+          </View>
+        )}
       </TouchableOpacity>
 
       <Text style={styles.helperText}>
-        Recommended size: 500 × 500 px
+        {uploading ? "Uploading..." : "Recommended size: 500 × 500 px"}
       </Text>
     </View>
   );

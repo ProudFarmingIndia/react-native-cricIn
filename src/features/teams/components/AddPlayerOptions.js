@@ -11,14 +11,35 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 
 import { COLORS } from "../../../constants/colors";
 
+/*
+|--------------------------------------------------------------------------
+| Add Player Options
+|--------------------------------------------------------------------------
+|
+| canInvite / canAddLocal map to the vice-captain rights
+| canSendInvitations and canManagePlayers. A vice-captain without the
+| right shouldn't be shown a card that the backend will reject on tap.
+|
+| Both default to true so the create-team flow, where the creator is
+| always owner and captain, is unaffected.
+|
+*/
+
 export default function AddPlayerOptions({
   onInvitePlayer,
   onAddLocalPlayer,
+  canInvite = true,
+  canAddLocal = true,
 }) {
+  if (!canInvite && !canAddLocal) {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
       {/* Invite CricIn Player */}
 
+      {canInvite && (
       <TouchableOpacity
         activeOpacity={0.9}
         style={styles.card}
@@ -55,9 +76,11 @@ export default function AddPlayerOptions({
           color="#A0A0A0"
         />
       </TouchableOpacity>
+      )}
 
       {/* Add Local Player */}
 
+      {/* {canAddLocal && (
       <TouchableOpacity
         activeOpacity={0.9}
         style={styles.card}
@@ -94,6 +117,7 @@ export default function AddPlayerOptions({
           color="#A0A0A0"
         />
       </TouchableOpacity>
+      )} */}
     </View>
   );
 }

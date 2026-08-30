@@ -13,12 +13,19 @@ import {
 } from "react-native";
 
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useDispatch, useSelector } from "react-redux";
 import { MaterialIcons } from "@expo/vector-icons";
+
+import { getProfile } from "../../profile/store/profileSlice";
+import { getProfileCompletion } from "../../../utils/profileCompletion";
 
 import {
   getLiveMatchesApi,
   getUpcomingMatchesApi,
+  getRecentMatchesApi,
 } from "../../matches/services/matches.services";
+
+import TeamBadge from "../../../components/matches/TeamBadge";
 
 import { COLORS } from "../../../constants/colors";
 
@@ -62,8 +69,27 @@ const formatMatchTime = (dateStr) => {
 export default function HomeScreen() {
   const navigation = useNavigation();
 
+  const dispatch = useDispatch();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Profile Completion
+  |--------------------------------------------------------------------------
+  |
+  | HomeScreen had no redux wiring at all, which is why the status card was
+  | hardcoded. The profile is refetched on focus alongside the matches, so
+  | the bar reflects an edit the moment the user comes back from
+  | EditProfileScreen.
+  |
+  */
+
+  const profile = useSelector((state) => state.profile?.profile);
+
+  const completion = getProfileCompletion(profile);
+
   const [liveMatches, setLiveMatches] = useState([]);
   const [upcomingMatches, setUpcomingMatches] = useState([]);
+  const [recentMatches, setRecentMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -71,13 +97,20 @@ export default function HomeScreen() {
     if (!isRefresh) setLoading(true);
 
     try {
-      const [live, upcoming] = await Promise.all([
+      const [live, upcoming, recent] = await Promise.all([
         getLiveMatchesApi(),
         getUpcomingMatchesApi(),
+
+        /*
+        | Capped at 5: Home is a launchpad, not an archive. The full list
+        | lives on the Matches tab, which is what "VIEW ALL" opens.
+        */
+        getRecentMatchesApi(5),
       ]);
 
       setLiveMatches(Array.isArray(live) ? live : []);
       setUpcomingMatches(Array.isArray(upcoming) ? upcoming : []); // all upcoming, no cap
+      setRecentMatches(Array.isArray(recent) ? recent : []);
     } catch (err) {
       console.error("[HomeScreen] Failed to load matches:", err);
     } finally {
@@ -89,36 +122,42 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load]),
+      dispatch(getProfile());
+    }, [load, dispatch]),
   );
 
   const handleRefresh = () => {
     setRefreshing(true);
     load(true);
+    dispatch(getProfile());
   };
 
   const openLiveMatch = (match) => {
     const inn = match.currentInnings;
 
-    navigation.navigate("Matches", {
-      screen: "QuickScoreFlow",
+    /*
+    | QuickScoreFlow moved from the Matches tab up to RootNavigator, so it
+    | is addressed directly instead of through the tab. Going via the tab
+    | is what pushed the flow onto the Matches stack and left "Matches"
+    | showing Quick Score afterwards.
+    */
+
+    navigation.navigate("QuickScoreFlow", {
+      screen: "LiveScoringScreen",
       params: {
-        screen: "LiveScoringScreen",
-        params: {
-          matchId: match._id,
-          inningsId: inn?.inningsId,
-          battingSquad: inn?.battingSquad || [],
-          bowlingSquad: inn?.bowlingSquad || [],
-          target: inn?.target,
-        },
+        matchId: match._id,
+        inningsId: inn?.inningsId,
+        battingSquad: inn?.battingSquad || [],
+        bowlingSquad: inn?.bowlingSquad || [],
+        target: inn?.target,
       },
     });
   };
 
   const openUpcomingMatch = (matchId) => {
-    navigation.navigate("Matches", {
-      screen: "QuickScoreFlow",
-      params: { screen: "MatchDetailsScreen", params: { matchId } },
+    navigation.navigate("QuickScoreFlow", {
+      screen: "MatchDetailsScreen",
+      params: { matchId },
     });
   };
 
@@ -143,29 +182,50 @@ export default function HomeScreen() {
         }
       >
         {/* ── Profile Status ──────────────────────────────────── */}
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() =>
-            navigation.navigate("Profile", { screen: "EditProfileScreen" })
-          }
-        >
-          <View style={styles.profileTop}>
-            <View>
-              <Text style={styles.sectionLabel}>PROFILE STATUS</Text>
-              <Text style={styles.title}>Almost there, Champ!</Text>
+        {/*
+          Percentage, headline, bar width and description are all derived
+          from the real profile now. This card used to be four hardcoded
+          values - "Almost there, Champ!" and 75%, in the text AND in
+          progressFill's stylesheet width - so it said the same thing on a
+          brand-new empty profile as on a finished one.
+
+          Hidden entirely once the profile is complete: a permanent 100%
+          bar is just noise on the home screen.
+        */}
+        {!completion.isComplete && (
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() =>
+              navigation.navigate("Profile", { screen: "EditProfileScreen" })
+            }
+          >
+            <View style={styles.profileTop}>
+              <View style={styles.profileHeadingBlock}>
+                <Text style={styles.sectionLabel}>PROFILE STATUS</Text>
+                <Text style={styles.title}>{completion.headline}</Text>
+              </View>
+
+              <Text style={styles.progressText}>{completion.percent}%</Text>
             </View>
 
-            <Text style={styles.progressText}>75%</Text>
-          </View>
+            <View style={styles.progressBar}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${completion.percent}%` },
+                ]}
+              />
+            </View>
 
-          <View style={styles.progressBar}>
-            <View style={styles.progressFill} />
-          </View>
-
-          <Text style={styles.description}>
-            Complete your profile to unlock advanced scout analytics.
-          </Text>
-        </TouchableOpacity>
+            <Text style={styles.description}>
+              {completion.missing.length > 0
+                ? `Next: ${completion.missing[0].label}. ${completion.missing.length} ${
+                    completion.missing.length === 1 ? "item" : "items"
+                  } left.`
+                : "Complete your profile to unlock advanced scout analytics."}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* ── Your Matches Header ──────────────────────────────── */}
         <View style={styles.sectionHeader}>
@@ -198,45 +258,162 @@ export default function HomeScreen() {
             {liveMatches.map((match) => {
               const inn = match.currentInnings;
 
-              return (
-                <TouchableOpacity
-                  key={match._id}
-                  style={[styles.card, styles.liveCard]}
-                  onPress={() => openLiveMatch(match)}
-                >
-                  <View style={styles.matchMeta}>
-                    <Text style={styles.matchTypeLabel}>{match.matchType}</Text>
-                  </View>
+                /*
+                | Teams are STACKED, not "A vs B" on one line.
+                |
+                | Side-by-side forced both names to share the width, so
+                | anything long truncated - "Ajay choudha..." - and the
+                | score had to float between them belonging to neither.
+                | Stacked gives each name the full row, puts the score
+                | against the team actually batting, and is how every
+                | cricket app shows a live game.
+                */
 
-                  <View style={styles.teamsRow}>
-                    <Text style={styles.teamNameBold} numberOfLines={1}>
-                      {match.teamA?.teamName ?? "Team A"}
-                    </Text>
+                const battingId = String(inn?.battingTeamId || "");
 
-                    <Text style={styles.vsText}>vs</Text>
+                const isTeamABatting =
+                  !!battingId && String(match.teamA?._id) === battingId;
 
-                    <Text style={styles.teamNameBold} numberOfLines={1}>
-                      {match.teamB?.teamName ?? "Team B"}
-                    </Text>
-                  </View>
+                const isTeamBBatting =
+                  !!battingId && String(match.teamB?._id) === battingId;
 
-                  {inn && (
-                    <View style={styles.scoreRow}>
-                      <Text style={styles.liveScore}>
-                        {inn.runs}/{inn.wickets}
-                      </Text>
+                return (
+                  <TouchableOpacity
+                    key={match._id}
+                    style={[styles.card, styles.liveCard]}
+                    onPress={() => openLiveMatch(match)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.chipGroup}>
+                        <View style={styles.formatChip}>
+                          <Text style={styles.formatChipText}>
+                            {match.matchType}
+                          </Text>
+                        </View>
 
-                      <Text style={styles.liveOvers}>
-                        ({inn.overs} ov) • RR {inn.runRate}
-                      </Text>
+                        {!!inn?.inningsNumber && (
+                          <View style={styles.inningsChip}>
+                            <Text style={styles.inningsChipText}>
+                              {inningsLabel(inn.inningsNumber)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {!!inn && (
+                        <Text style={styles.rrText}>RR {inn.runRate}</Text>
+                      )}
                     </View>
-                  )}
 
-                  <View style={styles.primaryButton}>
-                    <Text style={styles.primaryButtonText}>SCORE NOW →</Text>
-                  </View>
-                </TouchableOpacity>
-              );
+                    {/* Team A */}
+                    <View style={styles.sideRow}>
+                      <TeamBadge team={match.teamA} size={38} />
+
+                      <Text
+                        style={[
+                          styles.sideName,
+                          isTeamABatting && styles.sideNameBatting,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {match.teamA?.teamName ?? "Team A"}
+                      </Text>
+
+                      {isTeamABatting && inn ? (
+                        <View style={styles.sideScoreWrap}>
+                          <Text style={styles.sideScore}>
+                            {inn.runs}/{inn.wickets}
+                          </Text>
+
+                          <Text style={styles.sideOvers}>
+                            {inn.overs} ov · RR {inn.runRate}
+                          </Text>
+                        </View>
+                      ) : isTeamBBatting && inn?.inningsNumber === 1 ? (
+                        /*
+                        | Only meaningful in the first innings. In the
+                        | second, the other side has already batted - they
+                        | are not "yet to bat", they are defending.
+                        */
+                        <Text style={styles.sideYetToBat}>Yet to bat</Text>
+                      ) : null}
+                    </View>
+
+                    {/* Team B */}
+                    <View style={styles.sideRow}>
+                      <TeamBadge team={match.teamB} size={38} />
+
+                      <Text
+                        style={[
+                          styles.sideName,
+                          isTeamBBatting && styles.sideNameBatting,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {match.teamB?.teamName ?? "Team B"}
+                      </Text>
+
+                      {isTeamBBatting && inn ? (
+                        <View style={styles.sideScoreWrap}>
+                          <Text style={styles.sideScore}>
+                            {inn.runs}/{inn.wickets}
+                          </Text>
+
+                          <Text style={styles.sideOvers}>
+                            {inn.overs} ov · RR {inn.runRate}
+                          </Text>
+                        </View>
+                      ) : isTeamABatting && inn?.inningsNumber === 1 ? (
+                        <Text style={styles.sideYetToBat}>Yet to bat</Text>
+                      ) : null}
+                    </View>
+
+                    {/*
+                    | A live match with no innings yet is a real state - the
+                    | toss is done and scoring has not started. Saying so is
+                    | better than a card that looks broken, which is what
+                    | the second card in the list was doing.
+                    */}
+                    {/*
+                    | Fallback when there IS a score but we cannot tell
+                    | whose it is - an older backend that does not send
+                    | battingTeamId yet.
+                    |
+                    | The first version of this card hid the score entirely
+                    | in that case, which is the wrong failure: an unknown
+                    | side is a reason to show the score unattributed, not
+                    | to drop the most important number on the card.
+                    */}
+                    {!!inn && !isTeamABatting && !isTeamBBatting && (
+                      <View style={styles.neutralScoreRow}>
+                        <Text style={styles.sideScore}>
+                          {inn.runs}/{inn.wickets}
+                        </Text>
+
+                        <Text style={styles.neutralOvers}>
+                          ({inn.overs} ov) · RR {inn.runRate}
+                        </Text>
+                      </View>
+                    )}
+
+                    {!inn && (
+                      <Text style={styles.awaitingText}>
+                        Waiting for the first ball
+                      </Text>
+                    )}
+
+                    {!!inn?.target && (
+                      <Text style={styles.targetText}>
+                        Needs {Math.max(0, inn.target - inn.runs)} more to win
+                      </Text>
+                    )}
+
+                    <View style={styles.primaryButton}>
+                      <Text style={styles.primaryButtonText}>SCORE NOW →</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
             })}
           </>
         ) : null}
@@ -280,14 +457,19 @@ export default function HomeScreen() {
                     </Text>
                   ) : null}
 
-                  <View style={styles.teamsRow}>
-                    <Text style={styles.teamNameBold} numberOfLines={1}>
+                  {/* Stacked, same reasoning as the live card. */}
+                  <View style={styles.sideRow}>
+                    <TeamBadge team={match.teamA} size={34} />
+
+                    <Text style={styles.sideName} numberOfLines={1}>
                       {match.teamA?.teamName ?? "Team A"}
                     </Text>
+                  </View>
 
-                    <Text style={styles.vsText}>vs</Text>
+                  <View style={styles.sideRow}>
+                    <TeamBadge team={match.teamB} size={34} />
 
-                    <Text style={styles.teamNameBold} numberOfLines={1}>
+                    <Text style={styles.sideName} numberOfLines={1}>
                       {match.teamB?.teamName ?? "Team B"}
                     </Text>
                   </View>
@@ -360,10 +542,108 @@ export default function HomeScreen() {
           </>
         )}
 
+        {/* ── Recent Results ───────────────────────────────────── */}
+        {!loading && recentMatches.length > 0 && (
+          <>
+            <View style={styles.subsectionHeader}>
+              <Text style={styles.subsectionLabel}>RECENT RESULTS</Text>
+
+              <TouchableOpacity onPress={() => navigation.navigate("Matches")}>
+                <Text style={styles.seeAll}>VIEW ALL</Text>
+              </TouchableOpacity>
+            </View>
+
+            {recentMatches.map((match) => {
+              const winnerId = String(
+                match.winnerTeam?._id || match.winnerTeam || "",
+              );
+
+              const teamAWon = !!winnerId && String(match.teamA?._id) === winnerId;
+
+              const teamBWon = !!winnerId && String(match.teamB?._id) === winnerId;
+
+              return (
+                <TouchableOpacity
+                  key={match._id}
+                  style={[styles.card, styles.recentCard]}
+                  onPress={() => openUpcomingMatch(match._id)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.cardTopRow}>
+                    <View style={styles.formatChip}>
+                      <Text style={styles.formatChipText}>
+                        {match.matchType}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.completedText}>COMPLETED</Text>
+                  </View>
+
+                  {/*
+                  | The winner is marked with a tick and bolder text rather
+                  | than left to be inferred from the result sentence -
+                  | the result line is free text a captain typed, so it
+                  | might say anything or nothing at all.
+                  */}
+                  <View style={styles.sideRow}>
+                    <TeamBadge team={match.teamA} size={34} />
+
+                    <Text
+                      style={[
+                        styles.sideName,
+                        teamAWon && styles.sideNameWinner,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {match.teamA?.teamName ?? "Team A"}
+                    </Text>
+
+                    {teamAWon && (
+                      <MaterialIcons
+                        name="emoji-events"
+                        size={17}
+                        color={COLORS.secondary}
+                      />
+                    )}
+                  </View>
+
+                  <View style={styles.sideRow}>
+                    <TeamBadge team={match.teamB} size={34} />
+
+                    <Text
+                      style={[
+                        styles.sideName,
+                        teamBWon && styles.sideNameWinner,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {match.teamB?.teamName ?? "Team B"}
+                    </Text>
+
+                    {teamBWon && (
+                      <MaterialIcons
+                        name="emoji-events"
+                        size={17}
+                        color={COLORS.secondary}
+                      />
+                    )}
+                  </View>
+
+                  <Text style={styles.resultText} numberOfLines={2}>
+                    {match.result ||
+                      (winnerId ? "Result recorded" : "No result recorded")}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </>
+        )}
+
         {/* ── Empty state if no matches at all ─────────────────── */}
         {!loading &&
           liveMatches.length === 0 &&
-          upcomingMatches.length === 0 && (
+          upcomingMatches.length === 0 &&
+          recentMatches.length === 0 && (
             <View style={[styles.card, styles.emptyMatchCard]}>
               <MaterialIcons
                 name="sports-cricket"
@@ -385,7 +665,7 @@ export default function HomeScreen() {
         <View style={styles.quickGrid}>
           <TouchableOpacity
             onPress={() =>
-              navigation.navigate("Matches", { screen: "QuickScoreFlow" })
+              navigation.navigate("QuickScoreFlow")
             }
             style={styles.quickCard}
           >
@@ -417,6 +697,17 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+
+/*
+| "1st Innings" / "2nd Innings". Spelled out rather than shown as a bare
+| number, because "2" next to a score reads as part of the score.
+*/
+
+const inningsLabel = (n) => {
+  if (n === 1) return "1st Innings";
+  if (n === 2) return "2nd Innings";
+  return n ? `Innings ${n}` : null;
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -476,9 +767,14 @@ const styles = StyleSheet.create({
   },
 
   progressFill: {
-    width: "75%",
+    // width is applied inline from the computed percentage
     height: "100%",
     backgroundColor: COLORS.primary,
+  },
+
+  profileHeadingBlock: {
+    flex: 1,
+    paddingRight: 12,
   },
 
   description: {
@@ -579,6 +875,157 @@ const styles = StyleSheet.create({
   liveCard: {
     borderTopWidth: 4,
     borderTopColor: COLORS.error,
+  },
+
+  recentCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.outline,
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Stacked Match Rows
+  |--------------------------------------------------------------------------
+  |
+  | One row per team: badge, name, then the number that belongs to that
+  | team. Replaces the old single "A vs B" line, where two names competed
+  | for one row's width and long ones truncated.
+  |
+  */
+
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+
+  formatChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 7,
+    backgroundColor: COLORS.surfaceContainer,
+  },
+
+  formatChipText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    color: COLORS.primary,
+  },
+
+  rrText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: COLORS.onSurfaceVariant,
+  },
+
+  completedText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    color: COLORS.outline,
+  },
+
+  sideRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+
+  sideName: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 14.5,
+    fontWeight: "600",
+    color: COLORS.onSurface,
+  },
+
+  // The batting side is the one the eye should land on first.
+  sideNameBatting: {
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+
+  sideNameWinner: {
+    fontWeight: "800",
+    color: COLORS.onSurface,
+  },
+
+  sideScoreWrap: {
+    alignItems: "flex-end",
+  },
+
+  sideScore: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+
+  sideOvers: {
+    fontSize: 10.5,
+    color: COLORS.onSurfaceVariant,
+  },
+
+  sideYetToBat: {
+    fontSize: 11,
+    fontStyle: "italic",
+    color: COLORS.outline,
+  },
+
+  chipGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  inningsChip: {
+    marginLeft: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 7,
+    backgroundColor: COLORS.primaryContainer,
+  },
+
+  inningsChipText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    color: COLORS.onPrimary,
+  },
+
+  neutralScoreRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginTop: 8,
+  },
+
+  neutralOvers: {
+    marginLeft: 8,
+    fontSize: 11.5,
+    color: COLORS.onSurfaceVariant,
+  },
+
+  awaitingText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontStyle: "italic",
+    color: COLORS.onSurfaceVariant,
+  },
+
+  targetText: {
+    marginTop: 8,
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: COLORS.secondary,
+  },
+
+  resultText: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    fontSize: 12.5,
+    color: COLORS.onSurfaceVariant,
   },
 
   // ── Upcoming (horizontal slider) ──────────────────────────────────────
@@ -687,51 +1134,23 @@ const styles = StyleSheet.create({
 
   // ── Shared match card ─────────────────────────────────────────────────
 
-  teamsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
 
-  teamNameBold: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.text,
-    flex: 1,
-  },
 
-  vsText: {
-    color: COLORS.textLight,
-    fontWeight: "700",
-    fontSize: 12,
-    paddingHorizontal: 10,
-  },
 
-  scoreRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 12,
-    gap: 8,
-  },
 
-  liveScore: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: COLORS.primary,
-  },
 
-  liveOvers: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    fontWeight: "500",
-  },
 
   primaryButton: {
     backgroundColor: COLORS.primary,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: "center",
+
+    /*
+    | Breathing room above the button. It previously sat flush against the
+    | last team row, so the score and the tap target read as one block.
+    */
+    marginTop: 14,
   },
 
   primaryButtonText: {

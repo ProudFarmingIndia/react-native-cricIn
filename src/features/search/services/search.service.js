@@ -15,46 +15,21 @@ const unwrap = (response) => response.data?.data ?? response.data;
 |--------------------------------------------------------------------------
 */
 
+/*
+| The debug block that used to live here logged the full response of every
+| keystroke's search - names, phone numbers and profile URLs - to the
+| console on every device the app runs on. The thunk already turns a
+| rejection into a user-facing message, so nothing was lost by removing it.
+*/
+
 export const searchPlayersApi = async (keyword) => {
-  try {
-    console.log("=================================");
-    console.log("SEARCH PLAYER API");
-    console.log("URL:", ENDPOINTS.SEARCH.PLAYERS);
-    console.log("Keyword:", keyword);
+  const response = await apiClient.get(ENDPOINTS.SEARCH.PLAYERS, {
+    params: {
+      q: keyword,
+    },
+  });
 
-    const response = await apiClient.get(
-      ENDPOINTS.SEARCH.PLAYERS,
-      {
-        params: {
-          q: keyword,
-        },
-      },
-    );
-
-    console.log("SEARCH RESPONSE");
-    console.log(response.data);
-    console.log("=================================");
-
-    return unwrap(response);
-
-  } catch (error) {
-
-    console.log("=================================");
-    console.log("SEARCH PLAYER ERROR");
-
-    console.log("Status");
-    console.log(error?.response?.status);
-
-    console.log("Response");
-    console.log(error?.response?.data);
-
-    console.log("Message");
-    console.log(error?.message);
-
-    console.log("=================================");
-
-    throw error;
-  }
+  return unwrap(response);
 };
 
 /*

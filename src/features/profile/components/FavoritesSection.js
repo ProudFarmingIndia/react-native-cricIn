@@ -13,89 +13,56 @@ export default function FavoritesSection({
   isEditMode,
   updateField,
 }) {
+  // Safe destructuring with defaults
+  const {
+    favoriteCricketer = "",
+    favoriteTeam = "",
+    favoriteShot = "",
+    favoriteBall = "",
+  } = profile || {};
+
   if (isEditMode) {
     return (
-      <SectionCard
-        icon="⭐"
-        title="Favorites"
-      >
+      <SectionCard icon="⭐" title="Favorites">
         <InputField
           label="Favorite Cricketer"
           placeholder="Virat Kohli"
-          value={profile.favoriteCricketer}
-          onChangeText={(text) =>
-            updateField(
-              "favoriteCricketer",
-              text
-            )
-          }
+          value={favoriteCricketer || ""}
+          onChangeText={(text) => updateField("favoriteCricketer", text)}
         />
 
         <InputField
           label="Favorite Team"
           placeholder="India"
-          value={profile.favoriteTeam}
-          onChangeText={(text) =>
-            updateField(
-              "favoriteTeam",
-              text
-            )
-          }
+          value={favoriteTeam || ""}
+          onChangeText={(text) => updateField("favoriteTeam", text)}
         />
 
         <SelectField
           label="Favorite Shot"
-          value={profile.favoriteShot}
+          value={favoriteShot || ""}
           options={favoriteShots}
           placeholder="Select Favorite Shot"
-          onSelect={(value) =>
-            updateField(
-              "favoriteShot",
-              value
-            )
-          }
+          onSelect={(value) => updateField("favoriteShot", value)}
         />
 
         <SelectField
           label="Favorite Ball"
-          value={profile.favoriteBall}
+          value={favoriteBall || ""}
           options={favoriteBalls}
           placeholder="Select Favorite Ball"
-          onSelect={(value) =>
-            updateField(
-              "favoriteBall",
-              value
-            )
-          }
+          onSelect={(value) => updateField("favoriteBall", value)}
         />
       </SectionCard>
     );
   }
 
   return (
-    <SectionCard
-      icon="⭐"
-      title="Favorites"
-    >
-      <InfoRow
-        label="Favorite Cricketer"
-        value={profile.favoriteCricketer}
-      />
-
-      <InfoRow
-        label="Favorite Team"
-        value={profile.favoriteTeam}
-      />
-
-      <InfoRow
-        label="Favorite Shot"
-        value={profile.favoriteShot}
-      />
-
-      <InfoRow
-        label="Favorite Ball"
-        value={profile.favoriteBall}
-      />
+    <SectionCard icon="⭐" title="Favorites">
+      <InfoRow label="Favorite Cricketer" value={favoriteCricketer || ""} />
+      <InfoRow label="Favorite Team" value={favoriteTeam || ""} />
+      <InfoRow label="Favorite Shot" value={favoriteShot || ""} />
+      <InfoRow label="Favorite Ball" value={favoriteBall || ""} />
     </SectionCard>
   );
 }

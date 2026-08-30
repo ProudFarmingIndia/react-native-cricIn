@@ -18,8 +18,12 @@ export const ENDPOINTS = {
     UPDATE: "/players/me",
     CREATE: "/players",
     ALL: "/players/all",
-    BY_ID: "/players",
-    STATS: "/players",
+
+    // Both are per-player and take an id. They used to be the bare string
+    // "/players", so getPlayerByIdApi was calling a string as a function
+    // and PlayerProfileScreen could never load.
+    BY_ID: (playerId) => `/players/${playerId}`,
+    STATS: (playerId) => `/players/${playerId}/stats`,
   },
 
   MATCH: {
@@ -115,6 +119,35 @@ export const ENDPOINTS = {
     DELETE: (id) => `/team-invitations/${id}`,
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | Follows
+  |--------------------------------------------------------------------------
+  |
+  | targetType is always "PLAYER" or "TEAM" and is part of the path on
+  | every per-target route - the backend needs it to know which collection
+  | the id belongs to. UNFOLLOW in particular used to take only an id,
+  | which meant it could delete the wrong subscription.
+  |
+  */
+
+  FOLLOW: {
+    FOLLOW: "/follows",
+
+    UNFOLLOW: (targetType, targetId) => `/follows/${targetType}/${targetId}`,
+
+    STATS: (targetType, targetId) =>
+      `/follows/stats/${targetType}/${targetId}`,
+
+    FOLLOWERS: (targetType, targetId) =>
+      `/follows/followers/${targetType}/${targetId}`,
+
+    MY_FOLLOWING: "/follows/following",
+
+    RECALCULATE: (targetType, targetId) =>
+      `/follows/recalculate/${targetType}/${targetId}`,
+  },
+
   SEARCH: {
     PLAYERS: "/search/players",
     PLAYER_BY_MOBILE: "/search/players/mobile",
@@ -129,6 +162,8 @@ export const ENDPOINTS = {
     UNREAD_COUNT: "/notifications/unread-count",
     READ: (id) => `/notifications/${id}/read`,
     READ_ALL: "/notifications/read-all",
+    READ_MANY: "/notifications/read-many",
+    DELETE_MANY: "/notifications/many",
     DELETE: (id) => `/notifications/${id}`,
     DELETE_ALL: "/notifications",
   },
@@ -142,6 +177,50 @@ export const ENDPOINTS = {
     ADD_TEAM: (id) => `/tournaments/${id}/teams`,
     REMOVE_TEAM: (teamId, id) => `/tournaments/${id}/teams/${teamId}`,
     COMPLETE: (id) => `/tournaments/${id}/complete`,
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Highlights
+  |--------------------------------------------------------------------------
+  |
+  | Best moments, computed on the server from ball-by-ball data. The global
+  | feed takes a time range and optional location filters; the per-match
+  | one needs neither, because the match is the window.
+  |
+  */
+
+  /*
+  |--------------------------------------------------------------------------
+  | Stats
+  |--------------------------------------------------------------------------
+  |
+  | Leaderboards and team rankings, aggregated server-side from ball-by-ball
+  | data. FILTERS returns the city/state/country values that actually exist,
+  | so the filter offers real choices rather than a free-text box.
+  |
+  */
+
+  STATS: {
+    LEADERBOARDS: "/stats/leaderboards",
+
+    TEAM_RANKINGS: "/stats/teams",
+
+    FILTERS: "/stats/filters",
+  },
+
+  HIGHLIGHTS: {
+    LIST: "/highlights",
+
+    FOR_MATCH: (matchId) => `/highlights/match/${matchId}`,
+  },
+
+  SCORING_REQUEST: {
+    CREATE: "/scoring-requests",
+    MINE: "/scoring-requests/mine",
+    FOR_MY_TEAMS: "/scoring-requests/for-my-teams",
+    RESPOND: (id) => `/scoring-requests/${id}/respond`,
+    CANCEL: (id) => `/scoring-requests/${id}`,
   },
 
   UPLOAD: {

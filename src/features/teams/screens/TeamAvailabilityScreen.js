@@ -265,7 +265,9 @@ export default function TeamAvailabilityScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeaderRow}>
           <Text style={styles.cardTitle}>
-            <Ionicons name="event-available" size={16} /> Standard Availability
+            {/* was "event-available", a Material Icons name - Ionicons has
+                no such glyph, so it rendered as an empty box. */}
+            <Ionicons name="calendar-outline" size={16} /> Standard Availability
           </Text>
         </View>
 

@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MatchInfoSection from "../components/MatchInfoSection";
 import TeamSelectionSection from "../components/TeamSelectionSection";
@@ -64,7 +64,22 @@ const todayString = () => {
 export default function QuickScoreScreen() {
   const navigation = useNavigation();
 
-  const [mode, setMode] = useState("quick");
+  const route = useRoute();
+
+  /*
+  | The opening mode is chosen by whoever navigated here, so one screen can
+  | serve two entry points that mean different things:
+  |
+  |   Home > Quick Score   -> "quick"      (no params, the default)
+  |   Sidebar > Add Match  -> "scheduled"
+  |
+  | Read once as the initial state rather than synced to the param, so the
+  | toggle stays the user's to change after the screen opens.
+  */
+
+  const [mode, setMode] = useState(
+    route.params?.mode === "scheduled" ? "scheduled" : "quick",
+  );
 
   const [matchData, setMatchData] = useState({
     matchName: "",

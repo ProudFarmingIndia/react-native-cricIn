@@ -40,8 +40,6 @@ export default function OverSummaryScreen() {
     striker,
     nonStriker,
     bowler,
-    // ── New params ──────────────────────────────────────────────
-    // matchId,
     inningsId,
     bowlingPool = [],
     lastBowlerId,
@@ -49,18 +47,9 @@ export default function OverSummaryScreen() {
     oversBowledBy = {},
   } = route.params || {};
 
-  const { setNextBowler, loading } = useScoring();
+  const { setNextBowler, loading, loadInnings } = useScoring();
 
   const [pendingBowlerId, setPendingBowlerId] = useState(null);
-
-  console.log("[OverSummary] route.params", {
-    inningsId,
-    bowlingPoolLen: bowlingPool.length,
-    bowlingPoolNames: bowlingPool.map((p) => p.playerName),
-    lastBowlerId,
-    maxOversPerBowler,
-    oversBowledBy,
-  });
 
   const runsThisOver = overBalls.reduce(
     (sum, b) => sum + (b.teamRuns ?? b.runs ?? 0),
@@ -69,31 +58,83 @@ export default function OverSummaryScreen() {
 
   const wicketsThisOver = overBalls.filter((b) => b.isWicket).length;
 
-  // Eligible bowlers: not the one who just finished, and under quota.
+  /*
+  | Who can bowl next: anyone but the bowler who just finished, and anyone
+  | under the per-bowler over limit.
+  |
+  | The `|| 1` floor matters. In a short match maxOversPerBowler could
+  | arrive as 0 (Math.floor(4 / 5)), which excluded EVERY bowler - the list
+  | came back empty, no bowler could be chosen, and with this screen now
+  | un-dismissible that would be a dead end rather than an annoyance.
+  */
+
+  const overLimit = Math.max(1, maxOversPerBowler || 1);
+
   const eligibleBowlers = bowlingPool.filter((p) => {
     const id = p._id;
+
     if (String(id) === String(lastBowlerId)) return false;
+
     const oversBowled = (oversBowledBy[id] || 0) / 6;
-    return oversBowled < maxOversPerBowler;
+
+    return oversBowled < overLimit;
   });
 
-  console.log("[OverSummary] eligibleBowlers", eligibleBowlers.map((p) => p.playerName));
+  /*
+  | If the limit somehow rules everyone out, offer the whole pool minus the
+  | previous bowler rather than an empty list. A scorer who cannot pick a
+  | bowler cannot continue the match, and that is worse than a bowler
+  | exceeding a quota the app invented.
+  */
+
+  const selectableBowlers =
+    eligibleBowlers.length > 0
+      ? eligibleBowlers
+      : bowlingPool.filter((p) => String(p._id) !== String(lastBowlerId));
 
   const handleConfirmBowler = async () => {
     console.log("[OverSummary] handleConfirmBowler", { inningsId, pendingBowlerId });
-
-    if (!pendingBowlerId) return;
-
-    const result = await setNextBowler(inningsId, pendingBowlerId);
-
-    console.log("[OverSummary] setNextBowler result", result);
-
-    if (!result.success) {
-      Alert.alert("Failed", result.error || "Could not set the next bowler.");
+    if (!inningsId) {
+      Alert.alert("Missing innings", "Innings ID not provided. Please retry.");
+      return;
+    }
+    if (!pendingBowlerId) {
+      Alert.alert("Select bowler", "Please select the next bowler.");
       return;
     }
 
-    navigation.goBack();
+    try {
+      const result = await setNextBowler(inningsId, pendingBowlerId);
+      console.log("[OverSummary] setNextBowler result", result);
+
+      // handle possible wrapper shapes
+      if (!result) {
+        throw new Error("No response from setNextBowler");
+      }
+      if (result.success === false || result.error) {
+        throw new Error(result.error || "Failed to set next bowler");
+      }
+
+      /*
+      | Refresh, then go back.
+      |
+      | `loadInnings` was destructured from useScoring but the hook never
+      | returned it, so this was always undefined and the typeof guard made
+      | the refresh a silent no-op. It only appeared to work because going
+      | back re-focuses LiveScoringScreen, whose focus effect fetches. The
+      | hook exports it now and it is awaited, so the new bowler is on
+      | screen the moment the scorer lands back on the pad.
+      */
+
+      if (typeof loadInnings === "function") {
+        await loadInnings(inningsId);
+      }
+
+      navigation.goBack();
+    } catch (err) {
+      console.error("[OverSummary] setNextBowler error", err);
+      Alert.alert("Failed", err?.message || "Could not set the next bowler.");
+    }
   };
 
   return (
@@ -102,8 +143,6 @@ export default function OverSummaryScreen() {
         <Text style={styles.heading}>Over Completed</Text>
 
         <Text style={styles.subHeading}>End of Over {overs}</Text>
-
-        {/* ── Current Score Card ──────────────────────────────────── */}
 
         <View style={styles.scoreCard}>
           <Text style={styles.score}>
@@ -134,8 +173,6 @@ export default function OverSummaryScreen() {
             )}
           </View>
         </View>
-
-        {/* ── Runs In Over ────────────────────────────────────────── */}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Runs In Over</Text>
@@ -172,8 +209,6 @@ export default function OverSummaryScreen() {
           )}
         </View>
 
-        {/* ── At The Crease ────────────────────────────────────────── */}
-
         {(striker || nonStriker) && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>At The Crease</Text>
@@ -198,8 +233,6 @@ export default function OverSummaryScreen() {
           </View>
         )}
 
-        {/* ── Bowler ───────────────────────────────────────────────── */}
-
         {bowler && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Bowler This Over</Text>
@@ -213,17 +246,15 @@ export default function OverSummaryScreen() {
           </View>
         )}
 
-        {/* ── Select New Bowler ────────────────────────────────────── */}
-
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Select New Bowler</Text>
 
-          {eligibleBowlers.length === 0 ? (
+          {selectableBowlers.length === 0 ? (
             <Text style={styles.emptyBowlerText}>
               No eligible bowlers available (all at quota or only one bowler).
             </Text>
           ) : (
-            eligibleBowlers.map((player) => {
+            selectableBowlers.map((player) => {
               const id = player._id;
               const oversBowled = (oversBowledBy[id] || 0) / 6;
               const selected = pendingBowlerId === id;

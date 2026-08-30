@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 
 import {
   SafeAreaView,
@@ -31,6 +31,8 @@ import TeamStatisticsTab from "../components/TeamStatisticsTab";
 import TeamSettingsTab from "../components/TeamSettingsTab";
 import AssignRoleModal from "../components/AssignRoleModal";
 
+const SETTINGS_TAB = 4;
+
 export default function TeamDetailsScreen() {
   /*
   |--------------------------------------------------------------------------
@@ -42,7 +44,12 @@ export default function TeamDetailsScreen() {
 
   const route = useRoute();
 
-  const { teamId } = route.params;
+  /*
+  | initialTab lets another screen send the user back to a specific tab -
+  | EditTeamScreen and AddPlayerScreen both return to Settings (index 4)
+  | rather than dumping the user back on Overview after they finish.
+  */
+  const { teamId, initialTab } = route.params || {};
 
   /*
   |--------------------------------------------------------------------------
@@ -82,7 +89,25 @@ export default function TeamDetailsScreen() {
 
   const myPlayer = useSelector((state) => state.profile.profile);
 
-  const myUserId = authUser?._id;
+  /*
+  |--------------------------------------------------------------------------
+  | My User Id
+  |--------------------------------------------------------------------------
+  |
+  | team.userId is a User reference, so the owner check needs the logged-in
+  | USER id - not the player id.
+  |
+  | state.auth.user is the obvious source but it is not always populated:
+  | it is only written at login, so any session restored from storage
+  | before that was fixed has it as null. The player profile carries the
+  | same id on profile.userId (GET /players/me returns it, populated or
+  | raw), and getProfile runs on every profile/team screen - so it is a
+  | reliable fallback and means ownership resolves without a re-login.
+  |
+  */
+
+  const myUserId =
+    authUser?._id || myPlayer?.userId?._id || myPlayer?.userId;
 
   const myPlayerId = myPlayer?._id;
 
@@ -92,7 +117,9 @@ export default function TeamDetailsScreen() {
   |--------------------------------------------------------------------------
   */
 
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(
+    Number.isInteger(initialTab) ? initialTab : 0,
+  );
 
   const [captainModalOpen, setCaptainModalOpen] = useState(false);
 
@@ -107,6 +134,19 @@ export default function TeamDetailsScreen() {
       getTeamById(teamId);
     }, [teamId, getTeamById]),
   );
+
+  /*
+  | Returning here with a new initialTab (from Save Changes, or Done on
+  | Manage Players) has to move the tab - the useState initialiser only
+  | runs on first mount, so without this the screen would stay on
+  | whatever tab it was showing before.
+  */
+
+  useEffect(() => {
+    if (Number.isInteger(initialTab)) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   /*
   |--------------------------------------------------------------------------
@@ -147,7 +187,37 @@ export default function TeamDetailsScreen() {
   const isViceCaptain =
     String(currentTeam?.viceCaptainId?._id) === String(myPlayerId);
 
-  const canManage = isOwner || isCaptain || isViceCaptain;
+  /*
+  |--------------------------------------------------------------------------
+  | Vice-Captain Rights
+  |--------------------------------------------------------------------------
+  |
+  | This used to be a single `canManage = isOwner || isCaptain || isViceCaptain`,
+  | which handed a vice-captain every power the moment they were appointed
+  | and made the three toggles on ManageViceCaptainScreen purely decorative -
+  | you could switch them all off and nothing changed.
+  |
+  | Each right is now checked separately, mirroring the backend asserts
+  | exactly (assertCanEditTeam / assertCanManagePlayers /
+  | assertCanSendInvitations), so the UI hides what the server would refuse
+  | rather than showing a control that fails on tap.
+  |
+  | Owner and captain always hold all three - rights only ever gate a
+  | vice-captain.
+  |
+  */
+
+  const vcRights = currentTeam?.viceCaptainRights || {};
+
+  const isLeader = isOwner || isCaptain;
+
+  const canEditTeam = isLeader || (isViceCaptain && !!vcRights.canEditTeam);
+
+  const canManagePlayers =
+    isLeader || (isViceCaptain && !!vcRights.canManagePlayers);
+
+  const canSendInvitations =
+    isLeader || (isViceCaptain && !!vcRights.canSendInvitations);
 
   /*
   |--------------------------------------------------------------------------
@@ -161,6 +231,7 @@ export default function TeamDetailsScreen() {
       params: {
         teamId,
         team: currentTeam,
+        returnToTab: SETTINGS_TAB,
       },
     });
   };
@@ -172,6 +243,16 @@ export default function TeamDetailsScreen() {
         teamId,
         team: currentTeam,
         showSuccessBanner: false,
+
+        /*
+        | mode:"manage" is the difference between reaching this screen
+        | from Settings and reaching it as step 2 of team creation. In
+        | manage mode the primary button reads "Done" and comes back
+        | here; in the create flow it stays "Review Team".
+        */
+        mode: "manage",
+        returnToTab: SETTINGS_TAB,
+        canSendInvitations,
       },
     });
   };
@@ -219,10 +300,19 @@ export default function TeamDetailsScreen() {
     );
   };
 
+  /*
+  | An owner leaving hands the team over rather than being refused - the
+  | server picks the successor (vice-captain, then captain, then the
+  | longest-standing member with an account). Say so up front, because
+  | "leave" meaning "give this team to someone else" is not obvious.
+  */
+
   const handleLeaveTeam = () => {
     Alert.alert(
       "Leave Team",
-      `You will no longer be a member of ${currentTeam.teamName}.`,
+      isOwner
+        ? `You own ${currentTeam.teamName}. Leaving will hand ownership and captaincy to another member and remove you from the squad.`
+        : `You will no longer be a member of ${currentTeam.teamName}.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -297,7 +387,26 @@ export default function TeamDetailsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <TeamHeader team={currentTeam} />
+        {/*
+        | canFollow is off for the owner only. Squad members can still
+        | follow their own team - that is how they get the match-live and
+        | result notifications.
+        |
+        | Tapping the follower count opens the followers list at the root,
+        | so Back returns here rather than unwinding the team stack.
+        */}
+        <TeamHeader
+          team={currentTeam}
+          canFollow={!isOwner}
+          onPressFollowers={() =>
+            navigation.navigate("FollowListScreen", {
+              mode: "followers",
+              targetType: "TEAM",
+              targetId: currentTeam?._id,
+              title: `People following ${currentTeam?.teamName || "this team"}`,
+            })
+          }
+        />
 
         <TeamStatsOverview team={currentTeam} />
 
@@ -307,13 +416,17 @@ export default function TeamDetailsScreen() {
         />
 
         {activeTab === 0 && (
-          <TeamOverviewTab team={currentTeam} />
+          <TeamOverviewTab
+            team={currentTeam}
+            onPlayerPress={handlePlayerPress}
+            onViewAllPlayers={() => setActiveTab(1)}
+          />
         )}
 
         {activeTab === 1 && (
           <TeamPlayersTab
             team={currentTeam}
-            canManage={canManage}
+            canManage={canManagePlayers}
             onRemovePlayer={handleRemovePlayer}
             onPlayerPress={handlePlayerPress}
           />
@@ -330,11 +443,11 @@ export default function TeamDetailsScreen() {
         {activeTab === 4 && (
           <TeamSettingsTab
             team={currentTeam}
-            canEdit={canManage}
-            canManagePlayers={canManage}
-            canAssignCaptain={isOwner || isCaptain}
+            canEdit={canEditTeam}
+            canManagePlayers={canManagePlayers}
+            canAssignCaptain={isLeader}
             canDelete={isOwner}
-            canLeave={!isOwner}
+            canLeave
             onEditTeam={handleEditTeam}
             onManagePlayers={handleManagePlayers}
             onAvailability={handleAvailability}

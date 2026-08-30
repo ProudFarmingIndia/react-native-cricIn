@@ -41,6 +41,20 @@ export const NOTIFICATION_FILTERS = [
     label: "Tournament",
   },
 
+  /*
+  | Follow activity is its own filter rather than being folded into
+  | "Matches". A followed team's result and your own team's fixture are
+  | different kinds of news - one is something to act on, the other is
+  | something to read - and mixing them makes the Matches tab noisy enough
+  | that people stop opening it.
+  */
+
+  {
+    value: "SOCIAL",
+
+    label: "Following",
+  },
+
   {
     value: "SYSTEM",
 
@@ -249,60 +263,89 @@ export const FILTERS = NOTIFICATION_FILTERS;
 export const NOTIFICATION_CATEGORY_MAP = {
   /*
   |--------------------------------------------------------------------------
-  | Invitation
+  | Category Map
   |--------------------------------------------------------------------------
+  |
+  | Every type the backend can emit MUST appear here. NotificationScreen
+  | filters with NOTIFICATION_CATEGORY_MAP[item.type] === filter, so an
+  | unmapped type is invisible under every filter except "All".
+  |
+  | This previously missed 14 of the 25 live types - including every
+  | MATCH_CHALLENGE_*, MATCH_CONFIRMATION_REQUIRED and
+  | VICE_CAPTAIN_PROPOSED, which are the most actionable notifications in
+  | the app. Meanwhile six entries here were for types nothing emits.
+  |
   */
 
+  // Invitations
   TEAM_INVITATION_RECEIVED: "INVITATION",
   TEAM_INVITATION_ACCEPTED: "INVITATION",
   TEAM_INVITATION_REJECTED: "INVITATION",
   TEAM_INVITATION_CANCELLED: "INVITATION",
   TEAM_INVITATION_EXPIRED: "INVITATION",
 
-  /*
-  |--------------------------------------------------------------------------
-  | Team
-  |--------------------------------------------------------------------------
-  */
-
+  // Team - membership and leadership
   TEAM_CREATED: "TEAM",
+  TEAM_UPDATED: "TEAM",
+  TEAM_DELETED: "TEAM",
   PLAYER_JOINED_TEAM: "TEAM",
   PLAYER_LEFT_TEAM: "TEAM",
   CAPTAIN_ASSIGNED: "TEAM",
+  VICE_CAPTAIN_PROPOSED: "TEAM",
   VICE_CAPTAIN_ASSIGNED: "TEAM",
+  VICE_CAPTAIN_REJECTED: "TEAM",
+  VICE_CAPTAIN_CANCELLED: "TEAM",
+  TEAM_REVIEW_RECEIVED: "TEAM",
 
-  /*
-  |--------------------------------------------------------------------------
-  | Match
-  |--------------------------------------------------------------------------
-  */
-
+  // Match - fixtures, challenges and confirmation
   MATCH_CREATED: "MATCH",
   MATCH_REMINDER: "MATCH",
+  MATCH_STARTED: "MATCH",
   MATCH_COMPLETED: "MATCH",
+  MATCH_RESULT: "MATCH",
+  MATCH_CANCELLED: "MATCH",
+  MATCH_CONFIRMATION_REQUIRED: "MATCH",
+  MATCH_CONFIRMED: "MATCH",
+  MATCH_CONFIRMATION_REJECTED: "MATCH",
+  MATCH_PIN_SHARED: "MATCH",
+  MATCH_CHALLENGE_RECEIVED: "MATCH",
+  MATCH_CHALLENGE_ACCEPTED: "MATCH",
+  MATCH_CHALLENGE_REJECTED: "MATCH",
+  MATCH_CHALLENGE_CANCELLED: "MATCH",
+  MATCH_CHALLENGE_MODIFIED: "MATCH",
 
-  /*
-  |--------------------------------------------------------------------------
-  | Ground
-  |--------------------------------------------------------------------------
-  */
-
+  // Ground
+  GROUND_BOOKING_CREATED: "GROUND",
   GROUND_BOOKING_APPROVED: "GROUND",
+  GROUND_BOOKING_REJECTED: "GROUND",
   GROUND_BOOKING_CANCELLED: "GROUND",
 
-  /*
-  |--------------------------------------------------------------------------
-  | Tournament
-  |--------------------------------------------------------------------------
-  */
-
+  // Tournament
   TOURNAMENT_CREATED: "TOURNAMENT",
+  TOURNAMENT_INVITATION: "TOURNAMENT",
+  TOURNAMENT_STARTED: "TOURNAMENT",
+  TOURNAMENT_COMPLETED: "TOURNAMENT",
 
   /*
-  |--------------------------------------------------------------------------
-  | System
-  |--------------------------------------------------------------------------
+  | Social - follow activity.
+  |
+  | PLAYER_OF_THE_MATCH is the award landing on the player who won it, so
+  | it belongs with their own matches, not with their followers' feed.
   */
+  NEW_FOLLOWER: "SOCIAL",
+  FOLLOWED_MATCH_LIVE: "SOCIAL",
+  FOLLOWED_MATCH_RESULT: "SOCIAL",
+  FOLLOWED_PLAYER_AWARD: "SOCIAL",
+  FOLLOWED_PLAYER_MILESTONE: "SOCIAL",
+  PLAYER_OF_THE_MATCH: "MATCH",
 
+  // System - anything without a home of its own
+  CHAT_MESSAGE: "SYSTEM",
+  FOLLOW_REQUEST: "SYSTEM",
+  FOLLOW_ACCEPTED: "SYSTEM",
+  FOLLOW_REJECTED: "SYSTEM",
+  PROFILE_COMPLETED: "SYSTEM",
+  ACCOUNT_VERIFIED: "SYSTEM",
   SYSTEM: "SYSTEM",
+  APP_UPDATE: "SYSTEM",
 };

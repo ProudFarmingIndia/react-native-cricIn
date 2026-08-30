@@ -17,9 +17,8 @@ import {
 export default function useScoring() {
   const dispatch = useDispatch();
 
-  const { currentInnings, balls, loading, error, success } = useSelector(
-    (state) => state.scoring,
-  );
+  const { currentInnings, balls, loading, ballLoading, error, success } =
+    useSelector((state) => state.scoring);
 
   const startInnings = useCallback(
     async (payload) => {
@@ -113,6 +112,14 @@ export default function useScoring() {
     currentInnings,
     balls,
     loading,
+
+    /*
+    | Only the delivery round trip. `loading` is shared by every scoring
+    | thunk from every screen, so a modal that disables its submit button on
+    | it can be blocked by an unrelated request elsewhere.
+    */
+    ballLoading,
+
     error,
     success,
 
@@ -124,6 +131,14 @@ export default function useScoring() {
     setNextBowler: chooseNextBowler,
     undoLastBall: undoBall,
     getInningsScorecard: fetchInningsScorecard,
+
+    /*
+    | Alias. OverSummaryScreen destructures `loadInnings` from this hook and
+    | guards its call with typeof === "function" - which was always false,
+    | so its post-bowler-change refresh was a silent no-op that only worked
+    | by accident, because going back re-focused LiveScoringScreen.
+    */
+    loadInnings: fetchInningsScorecard,
 
     clearScoringError: useCallback(
       () => dispatch(clearScoringError()),

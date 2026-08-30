@@ -1,5 +1,13 @@
-export const API_CONFIG = {
-  BASE_URL: "http://192.168.1.127:5000/api",
+import { ENV } from "../../config/env";
 
-  TIMEOUT: 30000,
+/*
+| Derived from config/env.js so the REST host and the socket host can
+| never disagree again - they were separately hardcoded and had drifted
+| to two different machines.
+*/
+
+export const API_CONFIG = {
+  BASE_URL: ENV.API_BASE_URL,
+
+  TIMEOUT: ENV.REQUEST_TIMEOUT,
 };

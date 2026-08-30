@@ -1,16 +1,19 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
 } from "react-native";
 
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+import MatchCard from "../matches/MatchCard";
 
 import {
   getLiveMatchesApi,
@@ -22,217 +25,78 @@ import { COLORS } from "../../constants/colors";
 
 /*
 |--------------------------------------------------------------------------
-| Helpers
-|--------------------------------------------------------------------------
-*/
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
-
-const formatResult = (match) => {
-  if (!match.result) return match.status;
-  return match.result;
-};
-
-/*
-|--------------------------------------------------------------------------
-| Sub-components
-|--------------------------------------------------------------------------
-*/
-
-const SectionHeader = ({ title, badge, badgeColor }) => (
-  <View style={styles.sectionHeader}>
-    <View style={styles.sectionTitleRow}>
-      {badge && (
-        <View style={[styles.sectionDot, { backgroundColor: badgeColor }]} />
-      )}
-      <Text style={styles.sectionTitle}>{title}</Text>
-    </View>
-  </View>
-);
-
-const EmptyCard = ({ message }) => (
-  <View style={styles.emptyCard}>
-    <Text style={styles.emptyText}>{message}</Text>
-  </View>
-);
-
-/*
-|--------------------------------------------------------------------------
-| LiveMatchCard
-|--------------------------------------------------------------------------
-*/
-const LiveMatchCard = ({ match, onPress }) => {
-  const inn = match.currentInnings;
-
-  return (
-    <TouchableOpacity
-      style={styles.liveCard}
-      onPress={() => onPress(match._id)}
-    >
-      {/* Live badge */}
-      <View style={styles.liveCardHeader}>
-        <View style={styles.livePill}>
-          <View style={styles.liveDot} />
-          <Text style={styles.livePillText}>LIVE</Text>
-        </View>
-
-        <Text style={styles.matchType}>{match.matchType}</Text>
-      </View>
-
-      {/* Teams */}
-      <View style={styles.teamsRow}>
-        <Text style={styles.teamName} numberOfLines={1}>
-          {match.teamA?.teamName ?? "Team A"}
-        </Text>
-
-        <Text style={styles.vsLabel}>vs</Text>
-
-        <Text style={styles.teamName} numberOfLines={1}>
-          {match.teamB?.teamName ?? "Team B"}
-        </Text>
-      </View>
-
-      {/* Current innings score */}
-      {inn && (
-        <View style={styles.scoreRow}>
-          <Text style={styles.liveScore}>
-            {inn.runs}/{inn.wickets}
-          </Text>
-
-          <Text style={styles.liveOvers}>
-            ({inn.overs} ov) • RR {inn.runRate}
-          </Text>
-        </View>
-      )}
-
-      <TouchableOpacity
-        style={styles.actionBtn}
-        onPress={() => onPress(match._id)}
-      >
-        <Text style={styles.actionBtnText}>SCORE NOW →</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-};
-
-/*
-|--------------------------------------------------------------------------
-| UpcomingMatchCard
-|--------------------------------------------------------------------------
-*/
-const UpcomingMatchCard = ({ match, onPress }) => (
-  <TouchableOpacity
-    style={styles.upcomingCard}
-    onPress={() => onPress(match._id, "upcoming")}
-  >
-    <View style={styles.upcomingHeader}>
-      <Text style={styles.upcomingDate}>
-        {formatDate(match.scheduledStartTime || match.startTime)}
-      </Text>
-
-      <View style={styles.upcomingTypePill}>
-        <Text style={styles.upcomingTypeText}>{match.matchType}</Text>
-      </View>
-    </View>
-
-    <View style={styles.teamsRow}>
-      <Text style={styles.teamName} numberOfLines={1}>
-        {match.teamA?.teamName ?? "Team A"}
-      </Text>
-
-      <Text style={styles.vsLabel}>vs</Text>
-
-      <Text style={styles.teamName} numberOfLines={1}>
-        {match.teamB?.teamName ?? "Team B"}
-      </Text>
-    </View>
-
-    {match.venueName ? (
-      <Text style={styles.venueText} numberOfLines={1}>
-        📍 {match.venueName}
-      </Text>
-    ) : null}
-
-    {match.confirmationStatus === "pending" && (
-      <View style={styles.pendingBanner}>
-        <Text style={styles.pendingBannerText}>
-          ⏳ Awaiting opponent confirmation
-        </Text>
-      </View>
-    )}
-  </TouchableOpacity>
-);
-
-/*
-|--------------------------------------------------------------------------
-| RecentMatchCard
-|--------------------------------------------------------------------------
-*/
-const RecentMatchCard = ({ match, onPress }) => (
-  <TouchableOpacity
-    style={styles.recentCard}
-    onPress={() => onPress(match._id, "completed")}
-  >
-    <View style={styles.recentHeader}>
-      <Text style={styles.recentDate}>{formatDate(match.endTime)}</Text>
-
-      <View style={styles.completedPill}>
-        <Text style={styles.completedPillText}>RESULT</Text>
-      </View>
-    </View>
-
-    <View style={styles.teamsRow}>
-      <Text
-        style={[
-          styles.teamName,
-          match.winnerTeam?._id === match.teamA?._id && styles.winnerText,
-        ]}
-        numberOfLines={1}
-      >
-        {match.teamA?.teamName ?? "Team A"}
-        {match.winnerTeam?._id === match.teamA?._id ? " 🏆" : ""}
-      </Text>
-
-      <Text style={styles.vsLabel}>vs</Text>
-
-      <Text
-        style={[
-          styles.teamName,
-          match.winnerTeam?._id === match.teamB?._id && styles.winnerText,
-        ]}
-        numberOfLines={1}
-      >
-        {match.teamB?.teamName ?? "Team B"}
-        {match.winnerTeam?._id === match.teamB?._id ? " 🏆" : ""}
-      </Text>
-    </View>
-
-    {match.result ? (
-      <Text style={styles.resultText} numberOfLines={2}>
-        {match.result}
-      </Text>
-    ) : null}
-  </TouchableOpacity>
-);
-
-/*
-|--------------------------------------------------------------------------
-| MatchesTab
+| Matches Tab
 |--------------------------------------------------------------------------
 |
-| Three sections: Live → Upcoming → Recent (completed).
-| All data from real API — no mock data.
-| useFocusEffect ensures data is fresh whenever the tab is visited.
+| Live, upcoming and recent, all as vertical lists.
+|
+| WHY NO SLIDER
+| Upcoming used to be a horizontal carousel. A horizontal strip inside a
+| vertical scroll hides everything past the second card, fights the page
+| scroll on touch, and cannot show more than a couple of fixtures at once -
+| which is the wrong trade for the list you check most often.
+|
+| WHY ONE CARD COMPONENT
+| These used to be three bespoke card layouts that had drifted from the
+| Home screen's versions of the same three things. MatchCard is now shared,
+| so a fixture looks identical wherever it appears and there is one place
+| to change it.
 |
 */
+
+/*
+| Soonest first. The API returns upcoming matches unordered, so a fixture
+| three weeks out could sit above one starting this afternoon - the exact
+| opposite of what an "Upcoming" list is for.
+|
+| Matches with no date at all sort last: they are real fixtures, so they
+| should not vanish, but they cannot claim a place in a queue ordered by
+| time.
+*/
+
+const byStartTimeAscending = (a, b) => {
+  const at = new Date(a.scheduledStartTime || a.startTime || 0).getTime();
+
+  const bt = new Date(b.scheduledStartTime || b.startTime || 0).getTime();
+
+  const aValid = at > 0;
+
+  const bValid = bt > 0;
+
+  if (!aValid && !bValid) return 0;
+
+  if (!aValid) return 1;
+
+  if (!bValid) return -1;
+
+  return at - bt;
+};
+
+// Most recent first - the opposite question to the one above.
+const byEndTimeDescending = (a, b) => {
+  const at = new Date(a.endTime || a.startTime || 0).getTime();
+
+  const bt = new Date(b.endTime || b.startTime || 0).getTime();
+
+  return bt - at;
+};
+
+const Section = ({ label, count, children }) => (
+  <>
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionLabel}>{label}</Text>
+
+      {count > 0 && (
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{count}</Text>
+        </View>
+      )}
+    </View>
+
+    {children}
+  </>
+);
+
 export default function MatchesTab() {
   const navigation = useNavigation();
 
@@ -241,22 +105,31 @@ export default function MatchesTab() {
   const [recentMatches, setRecentMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   const load = useCallback(async (isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    setError(null);
 
     try {
       const [live, upcoming, recent] = await Promise.all([
         getLiveMatchesApi(),
         getUpcomingMatchesApi(),
-        getRecentMatchesApi(10),
+        getRecentMatchesApi(20),
       ]);
 
       setLiveMatches(Array.isArray(live) ? live : []);
       setUpcomingMatches(Array.isArray(upcoming) ? upcoming : []);
       setRecentMatches(Array.isArray(recent) ? recent : []);
-    } catch (err) {
-      console.error("[MatchesTab] load failed:", err);
+    } catch (e) {
+      setError(
+        e.response?.data?.message || e.message || "Could not load matches.",
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -269,408 +142,225 @@ export default function MatchesTab() {
     }, [load]),
   );
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    load(true);
-  };
+  const sortedUpcoming = useMemo(
+    () => [...upcomingMatches].sort(byStartTimeAscending),
+    [upcomingMatches],
+  );
 
-  const handleMatchPress = (matchId, status) => {
-    if (status === "completed") {
-      navigation.navigate("Matches", {
-        screen: "QuickScoreFlow",
-        params: { screen: "ScorecardScreen", params: { matchId } },
+  const sortedRecent = useMemo(
+    () => [...recentMatches].sort(byEndTimeDescending),
+    [recentMatches],
+  );
+
+  const openLive = (match) => {
+    const inn = match.currentInnings;
+
+    if (inn?.inningsId) {
+      navigation.navigate("QuickScoreFlow", {
+        screen: "LiveScoringScreen",
+        params: {
+          matchId: match._id,
+          inningsId: inn.inningsId,
+          battingSquad: inn.battingSquad || [],
+          bowlingSquad: inn.bowlingSquad || [],
+          target: inn.target,
+        },
       });
-    } else {
-      navigation.navigate("Matches", {
-        screen: "QuickScoreFlow",
-        params: { screen: "MatchCenterScreen", params: { matchId } },
-      });
+
+      return;
     }
+
+    openDetails(match);
   };
 
-  const handleLivePress = (matchId) => handleMatchPress(matchId, "live");
+  const openDetails = (match) => {
+    navigation.navigate("QuickScoreFlow", {
+      screen: "MatchDetailsScreen",
+      params: { matchId: match._id },
+    });
+  };
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
-  const hasAnyMatch =
-    liveMatches.length > 0 ||
-    upcomingMatches.length > 0 ||
-    recentMatches.length > 0;
+  const isEmpty =
+    liveMatches.length === 0 &&
+    sortedUpcoming.length === 0 &&
+    sortedRecent.length === 0;
 
   return (
-    <ScrollView
-      style={styles.screen}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          colors={[COLORS.primary]}
-          tintColor={COLORS.primary}
-        />
-      }
-    >
-      {!hasAnyMatch && (
-        <View style={styles.noMatchesContainer}>
-          <Text style={styles.noMatchesIcon}>🏏</Text>
-          <Text style={styles.noMatchesTitle}>No Matches Yet</Text>
-          <Text style={styles.noMatchesSubtitle}>
-            Create a match or accept a challenge to get started.
-          </Text>
-        </View>
-      )}
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load(true)}
+            tintColor={COLORS.primary}
+          />
+        }
+      >
+        {!!error && (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
 
-      {/* ── Live ──────────────────────────────────────────────── */}
-      {(liveMatches.length > 0 || hasAnyMatch) && (
-        <SectionHeader title="Live Matches" badge badgeColor={COLORS.error} />
-      )}
+        {liveMatches.length > 0 && (
+          <Section label="LIVE NOW" count={liveMatches.length}>
+            {liveMatches.map((m) => (
+              <MatchCard
+                key={m._id}
+                match={m}
+                variant="live"
+                onPress={openLive}
+              />
+            ))}
+          </Section>
+        )}
 
-      {liveMatches.length === 0
-        ? hasAnyMatch && <EmptyCard message="No live matches right now" />
-        : liveMatches.map((m) => (
-            <LiveMatchCard key={m._id} match={m} onPress={handleLivePress} />
-          ))}
+        {sortedUpcoming.length > 0 && (
+          <Section label="UPCOMING" count={sortedUpcoming.length}>
+            {sortedUpcoming.map((m) => (
+              <MatchCard
+                key={m._id}
+                match={m}
+                variant="upcoming"
+                onPress={openDetails}
+              />
+            ))}
+          </Section>
+        )}
 
-      {/* ── Upcoming ──────────────────────────────────────────── */}
-      {hasAnyMatch && <SectionHeader title="Upcoming Matches" />}
+        {sortedRecent.length > 0 && (
+          <Section label="RECENT RESULTS" count={sortedRecent.length}>
+            {sortedRecent.map((m) => (
+              <MatchCard
+                key={m._id}
+                match={m}
+                variant="recent"
+                onPress={openDetails}
+              />
+            ))}
+          </Section>
+        )}
 
-      {upcomingMatches.length === 0
-        ? hasAnyMatch && <EmptyCard message="No upcoming matches scheduled" />
-        : upcomingMatches.map((m) => (
-            <UpcomingMatchCard
-              key={m._id}
-              match={m}
-              onPress={handleMatchPress}
-            />
-          ))}
+        {isEmpty && !error && (
+          <View style={styles.stateBlock}>
+            <View style={styles.stateIcon}>
+              <Ionicons
+                name="calendar-outline"
+                size={26}
+                color={COLORS.primary}
+              />
+            </View>
 
-      {/* ── Recent ────────────────────────────────────────────── */}
-      {hasAnyMatch && <SectionHeader title="Recent Results" />}
+            <Text style={styles.stateTitle}>No matches yet</Text>
 
-      {recentMatches.length === 0
-        ? hasAnyMatch && <EmptyCard message="No completed matches yet" />
-        : recentMatches.map((m) => (
-            <RecentMatchCard key={m._id} match={m} onPress={handleMatchPress} />
-          ))}
-    </ScrollView>
+            <Text style={styles.stateText}>
+              Matches you play or score appear here. Start one with Quick
+              Score, or send a challenge to another team.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
 
-  scrollContent: {
-    paddingBottom: 40,
-  },
-
   centered: {
-    flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-    paddingTop: 80,
+    justifyContent: "center",
   },
 
-  // ── Section ──────────────────────────────────────────────────────────
+  scroll: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 120,
+  },
 
   sectionHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 8,
-  },
-
-  sectionTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-
-  sectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: COLORS.onSurface,
-  },
-
-  emptyCard: {
-    marginHorizontal: 16,
-    marginBottom: 4,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: COLORS.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    alignItems: "center",
-  },
-
-  emptyText: {
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
-    fontStyle: "italic",
-  },
-
-  // ── No Matches ────────────────────────────────────────────────────────
-
-  noMatchesContainer: {
-    alignItems: "center",
-    paddingTop: 60,
-    paddingHorizontal: 32,
-  },
-
-  noMatchesIcon: {
-    fontSize: 56,
-    marginBottom: 16,
-  },
-
-  noMatchesTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.onSurface,
-    marginBottom: 8,
-  },
-
-  noMatchesSubtitle: {
-    fontSize: 14,
-    color: COLORS.onSurfaceVariant,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-
-  // ── Live Card ─────────────────────────────────────────────────────────
-
-  liveCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.error + "40",
-    borderTopWidth: 4,
-    borderTopColor: COLORS.error,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-  },
-
-  liveCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  livePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.error + "18",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    gap: 5,
-  },
-
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.error,
-  },
-
-  livePillText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: COLORS.error,
-    letterSpacing: 0.5,
-  },
-
-  matchType: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.onSurfaceVariant,
-  },
-
-  // ── Upcoming Card ─────────────────────────────────────────────────────
-
-  upcomingCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    elevation: 1,
-  },
-
-  upcomingHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  upcomingDate: {
-    fontSize: 12,
-    color: COLORS.onSurfaceVariant,
-    fontWeight: "600",
-  },
-
-  upcomingTypePill: {
-    backgroundColor: COLORS.primary + "15",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-
-  upcomingTypeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-
-  pendingBanner: {
-    backgroundColor: "#fff3e0",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginTop: 10,
-  },
-
-  pendingBannerText: {
-    fontSize: 12,
-    color: "#ef6c00",
-    fontWeight: "600",
-  },
-
-  // ── Recent Card ───────────────────────────────────────────────────────
-
-  recentCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-  },
-
-  recentHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  recentDate: {
-    fontSize: 12,
-    color: COLORS.onSurfaceVariant,
-    fontWeight: "500",
-  },
-
-  completedPill: {
-    backgroundColor: COLORS.primary + "15",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-
-  completedPillText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-
-  resultText: {
     marginTop: 8,
-    fontSize: 13,
-    color: COLORS.primary,
-    fontWeight: "600",
-    textAlign: "center",
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.outlineVariant,
+    marginBottom: 10,
   },
 
-  // ── Shared ────────────────────────────────────────────────────────────
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.7,
+    color: COLORS.onSurfaceVariant,
+  },
 
-  teamsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  countBadge: {
+    marginLeft: 8,
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 9,
+    backgroundColor: COLORS.surfaceContainerHigh,
     alignItems: "center",
-    marginBottom: 6,
   },
 
-  teamName: {
-    fontSize: 15,
+  countText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: COLORS.onSurfaceVariant,
+  },
+
+  errorCard: {
+    backgroundColor: COLORS.errorContainer,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+
+  errorText: {
+    fontSize: 12.5,
+    color: COLORS.onErrorContainer,
+  },
+
+  stateBlock: {
+    alignItems: "center",
+    marginTop: 56,
+    paddingHorizontal: 24,
+  },
+
+  stateIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: COLORS.surfaceContainer,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+
+  stateTitle: {
+    fontSize: 15.5,
     fontWeight: "700",
     color: COLORS.onSurface,
-    flex: 1,
+    textAlign: "center",
   },
 
-  winnerText: {
-    color: "#2e7d32",
-  },
-
-  vsLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.onSurfaceVariant,
-    paddingHorizontal: 10,
-  },
-
-  venueText: {
-    fontSize: 12,
-    color: COLORS.onSurfaceVariant,
+  stateText: {
     marginTop: 6,
-  },
-
-  scoreRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 12,
-    gap: 8,
-  },
-
-  liveScore: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: COLORS.primary,
-  },
-
-  liveOvers: {
     fontSize: 13,
+    lineHeight: 19,
     color: COLORS.onSurfaceVariant,
-    fontWeight: "500",
-  },
-
-  actionBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-
-  actionBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 13,
-    letterSpacing: 0.5,
+    textAlign: "center",
   },
 });

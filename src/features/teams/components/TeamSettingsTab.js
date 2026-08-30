@@ -123,19 +123,18 @@ export default function TeamSettingsTab({
       {/* ---------------------------------------------------------- */}
       {/* Danger Zone */}
       {/* ---------------------------------------------------------- */}
+      {/*
+        The owner sees both: Delete ends the team for everyone, Leave hands
+        it to another member and steps away. Everyone else sees Leave only,
+        since deleting is the owner's alone.
 
-      <Text style={styles.sectionTitle}>
-        Danger Zone
-      </Text>
+        Delete comes first because it is the more consequential of the two.
+        The header is hidden when neither row applies, so the section never
+        renders as a bare title.
+      */}
 
-      {canLeave && (
-        <SettingItem
-          danger
-          icon="exit-outline"
-          title="Leave Team"
-          subtitle="You will no longer be a member"
-          onPress={onLeaveTeam}
-        />
+      {(canLeave || canDelete) && (
+        <Text style={styles.sectionTitle}>Danger Zone</Text>
       )}
 
       {canDelete && (
@@ -145,6 +144,20 @@ export default function TeamSettingsTab({
           title="Delete Team"
           subtitle="This action cannot be undone"
           onPress={onDeleteTeam}
+        />
+      )}
+
+      {canLeave && (
+        <SettingItem
+          danger
+          icon="exit-outline"
+          title="Leave Team"
+          subtitle={
+            canDelete
+              ? "Hand the team to another member and step away"
+              : "You will no longer be a member"
+          }
+          onPress={onLeaveTeam}
         />
       )}
     </View>

@@ -30,6 +30,25 @@ export const deleteNotificationApi = async (notificationId) => {
   return unwrap(response);
 };
 
+/*
+| Bulk counterparts for the multi-select on the notification screen. One
+| request per selection instead of one per row.
+*/
+
+export const markManyAsReadApi = async (ids) => {
+  const response = await apiClient.put(ENDPOINTS.NOTIFICATIONS.READ_MANY, {
+    ids,
+  });
+  return unwrap(response);
+};
+
+export const deleteManyApi = async (ids) => {
+  const response = await apiClient.delete(ENDPOINTS.NOTIFICATIONS.DELETE_MANY, {
+    data: { ids },
+  });
+  return unwrap(response);
+};
+
 // ── Team Invitations ──────────────────────────────────────────────────────
 
 export const acceptInvitationApi = async (invitationId) => {

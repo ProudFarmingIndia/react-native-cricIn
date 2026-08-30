@@ -1,50 +1,123 @@
 import React from "react";
+
 import { View, Text, StyleSheet } from "react-native";
 
-// Helper to map angles to standard cricket fielding positions
-const getDirectionName = (angle) => {
-  if (angle == null) return null;
-  const a = (angle + 360) % 360;
-  if (a >= 337.5 || a < 22.5) return "Fine Leg";
-  if (a >= 22.5 && a < 67.5) return "Square Leg / Mid-Wicket";
-  if (a >= 67.5 && a < 112.5) return "Long-On / Mid-On";
-  if (a >= 112.5 && a < 157.5) return "Straight / Long-Off";
-  if (a >= 157.5 && a < 202.5) return "Extra Cover / Cover";
-  if (a >= 202.5 && a < 247.5) return "Point / Deep Point";
-  if (a >= 247.5 && a < 292.5) return "Third Man";
-  if (a >= 292.5 && a < 337.5) return "Short Fine Leg";
-  return null;
-};
+import { regionName } from "../../../features/matches/utils/commentary";
 
-// Returns Cricbuzz style badge styling based on ball outcome
-const getBadgeStyle = (item) => {
-  if (item.isWicket || item.wicketDetail) {
-    return { bg: "#D32F2F", text: "#FFF", label: "W" };
+import { COLORS } from "../../../constants/colors";
+
+/*
+|--------------------------------------------------------------------------
+| Commentary
+|--------------------------------------------------------------------------
+|
+| Rewritten around the server's commentary line rather than around a
+| sentence built here.
+|
+| WHAT WAS WRONG
+| The screen showed "Bowler to Batsman" above "1 run at 3.3", with an
+| "undefined" badge. Three separate causes:
+|
+|   1. The server's commentary never contained any names - it was built
+|      from runs and the over number alone.
+|   2. This component printed a literal "Bowler to Batsman" line because
+|      the ball objects it received carried no names to use.
+|   3. LiveScoringScreen mapped every ball down to { over, text } before
+|      passing it here, so runs and isWicket were gone - hence a badge
+|      rendering "undefined".
+|
+| All three are fixed. The server now writes "Virat Kumar to Manoj Saxena,
+| FOUR, cover drive through Cover" using the real names and the shot and
+| direction the scorer entered, the full ball object is passed through, and
+| this component just renders it.
+|
+| The badge is still derived here, because it is presentation: the same
+| ball is "4" in a list and a blue disc on a timeline.
+|
+*/
+
+const getBadge = (item) => {
+  if (item.isWicket) {
+    return { bg: COLORS.error, text: "#fff", label: "W" };
   }
-  if (item.extraType === "wide" || item.isWide) {
-    return { bg: "#E65100", text: "#FFF", label: `${item.runs || 1}WD` };
+
+  if (item.extraType === "wide") {
+    return { bg: "#E65100", text: "#fff", label: `${item.runs || 0}wd` };
   }
-  if (item.extraType === "noBall" || item.isNoBall) {
-    return { bg: "#EF6C00", text: "#FFF", label: `${item.runs || 1}NB` };
+
+  if (item.extraType === "noBall") {
+    return { bg: "#EF6C00", text: "#fff", label: `${item.runs || 0}nb` };
   }
+
+  if (item.extraType === "bye" || item.extraType === "legBye") {
+    return {
+      bg: COLORS.surfaceContainerHigh,
+      text: COLORS.onSurface,
+      label: `${item.runs || 0}${item.extraType === "bye" ? "b" : "lb"}`,
+    };
+  }
+
   if (item.runs === 6) {
-    return { bg: "#1B5E20", text: "#FFF", label: "6" };
+    return { bg: "#6A1B9A", text: "#fff", label: "6" };
   }
+
   if (item.runs === 4) {
-    return { bg: "#2E7D32", text: "#FFF", label: "4" };
+    return { bg: "#1565C0", text: "#fff", label: "4" };
   }
-  if (item.runs === 0) {
-    return { bg: "#ECEFF1", text: "#455A64", label: "0" };
+
+  /*
+  | A dot is a dot, not "0" - and a ball with no runs recorded at all is
+  | also a dot rather than the word "undefined", which is what used to
+  | reach the screen.
+  */
+  if (!item.runs) {
+    return { bg: COLORS.surfaceContainer, text: COLORS.onSurfaceVariant, label: "•" };
   }
-  return { bg: "#E0E0E0", text: "#212121", label: `${item.runs}` };
+
+  return {
+    bg: COLORS.surfaceContainer,
+    text: COLORS.onSurface,
+    label: String(item.runs),
+  };
 };
 
-export default function CommentarySection({ commentary = [] }) {
+/*
+| The commentary lines use **double asterisks** around names and outcomes.
+| React Native's Text has no markdown, so rendering the raw string printed
+| the asterisks on screen - "**FOUR!** **Manoj Saxena**".
+|
+| Splitting on the markers and nesting a bold Text for the odd segments is
+| all it takes, and it gives the names the emphasis they were written to
+| have.
+*/
+
+const RichLine = ({ text, style, boldStyle }) => {
+  const parts = String(text || "").split("**");
+
+  return (
+    <Text style={style}>
+      {parts.map((part, index) =>
+        index % 2 === 1 ? (
+          <Text key={index} style={boldStyle}>
+            {part}
+          </Text>
+        ) : (
+          part
+        ),
+      )}
+    </Text>
+  );
+};
+
+export default function CommentarySection({ commentary }) {
   if (!commentary || commentary.length === 0) {
     return (
       <View style={styles.container}>
         <Text style={styles.heading}>Commentary</Text>
-        <Text style={styles.emptyText}>No commentary available yet.</Text>
+
+        <Text style={styles.emptyText}>
+          Commentary appears here as each ball is scored.
+        </Text>
       </View>
     );
   }
@@ -54,37 +127,50 @@ export default function CommentarySection({ commentary = [] }) {
       <Text style={styles.heading}>Commentary</Text>
 
       {commentary.map((item, index) => {
-        const overStr = item.over ?? (item.overNumber != null && item.ballNumber != null ? `${item.overNumber}.${item.ballNumber}` : "");
-        const badge = getBadgeStyle(item);
-        const direction = getDirectionName(item.angle ?? item.shotAngle);
+        const badge = getBadge(item);
 
-        // Build Cricbuzz style delivery text
-        const bowlerName = item.bowlerName || item.bowler?.name || item.bowler || "Bowler";
-        const batsmanName = item.batsmanName || item.striker?.name || item.batsman || "Batsman";
+        const over =
+          item.over ??
+          (item.overNumber != null && item.ballNumber != null
+            ? `${item.overNumber}.${item.ballNumber}`
+            : "");
 
-        let commentaryText = item.text;
+        /*
+        | `text` is the line the screen BUILT (with names, shot and
+        | direction); `commentaryText` is what the server stored, which for
+        | older balls is the name-less "1 run at 3.3" format.
+        |
+        | The built line therefore wins. Reading them the other way round is
+        | the same mistake that made this component show "1 run at 3.3" in
+        | the first place.
+        */
+        const line = item.text || item.commentaryText || "";
 
-        if (!commentaryText) {
-          if (item.isWicket || item.wicketDetail) {
-            const dismissal = item.wicketDetail?.type || item.dismissalType || "Wicket";
-            const fielder = item.wicketDetail?.fielderName ? ` caught by ${item.wicketDetail.fielderName}` : "";
-            commentaryText = `OUT! ${dismissal}${fielder}. ${batsmanName} departs.`;
-          } else if (item.runs === 6) {
-            commentaryText = `SIX! ${batsmanName} lofts it over ${direction || "the boundary"} for a huge maximum!`;
-          } else if (item.runs === 4) {
-            commentaryText = `FOUR! Beautifully struck by ${batsmanName} through ${direction || "the field"} for four runs.`;
-          } else if (item.runs === 0) {
-            commentaryText = `No run. Good delivery to ${batsmanName}, defended safely.`;
-          } else {
-            commentaryText = `${item.runs} run${item.runs > 1 ? "s" : ""}. Worked away towards ${direction || "the outfield"}.`;
-          }
-        }
+        /*
+        | Shot and direction are also shown as their own small chips under
+        | the sentence, not only inside it.
+        |
+        | They are the two fields the wagon wheel and shot statistics will
+        | be built from - "where does this batter score most" - so they are
+        | worth surfacing as data the eye can scan down a column, rather
+        | than only as words buried mid-sentence.
+        |
+        | The region falls back to the stored angle, so a ball recorded
+        | before the region name was saved still shows its direction.
+        */
+
+        const region =
+          item.wagonWheel?.region || regionName(item.wagonWheel?.angle);
+
+        const shot = item.shotType;
+
+        const showTags = (!!shot || !!region) && !item.extraType;
 
         return (
-          <View key={item._id || index} style={styles.card}>
-            {/* Left Column: Over Number & Outcome Badge */}
+          <View key={item._id || index} style={styles.row}>
             <View style={styles.leftCol}>
-              <Text style={styles.overText}>{overStr}</Text>
+              <Text style={styles.overText}>{over}</Text>
+
               <View style={[styles.badge, { backgroundColor: badge.bg }]}>
                 <Text style={[styles.badgeText, { color: badge.text }]}>
                   {badge.label}
@@ -92,19 +178,29 @@ export default function CommentarySection({ commentary = [] }) {
               </View>
             </View>
 
-            {/* Right Column: Bowler vs Batsman & Detail */}
             <View style={styles.rightCol}>
-              <Text style={styles.matchupText}>
-                <Text style={styles.boldText}>{bowlerName}</Text> to{" "}
-                <Text style={styles.boldText}>{batsmanName}</Text>
-              </Text>
+              <RichLine
+                text={line}
+                style={styles.line}
+                boldStyle={styles.lineBold}
+              />
 
-              <Text style={styles.commentaryDetail}>{commentaryText}</Text>
+              {showTags && (
+                <View style={styles.tagRow}>
+                  {!!shot && (
+                    <View style={styles.tag}>
+                      <Text style={styles.tagText}>{shot}</Text>
+                    </View>
+                  )}
 
-              {direction && item.runs > 0 && (
-                <Text style={styles.directionTag}>
-                  Shot direction: {direction} ({item.angle ?? item.shotAngle}°)
-                </Text>
+                  {!!region && (
+                    <View style={[styles.tag, styles.tagDirection]}>
+                      <Text style={[styles.tagText, styles.tagTextDirection]}>
+                        {region}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               )}
             </View>
           </View>
@@ -116,76 +212,102 @@ export default function CommentarySection({ commentary = [] }) {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
-    paddingHorizontal: 4,
-  },
-  heading: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111827",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 14,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
   },
-  emptyText: {
-    fontSize: 14,
-    color: "#6B7280",
-    fontStyle: "italic",
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    padding: 12,
+
+  heading: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.onSurface,
     marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
   },
-  leftCol: {
-    alignItems: "center",
-    marginRight: 12,
-    minWidth: 44,
-  },
-  overText: {
+
+  emptyText: {
     fontSize: 13,
-    fontWeight: "700",
-    color: "#00490E",
-    marginBottom: 4,
+    color: COLORS.onSurfaceVariant,
   },
+
+  row: {
+    flexDirection: "row",
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceContainer,
+  },
+
+  leftCol: {
+    width: 46,
+    alignItems: "center",
+  },
+
+  overText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: COLORS.onSurfaceVariant,
+    fontVariant: ["tabular-nums"],
+  },
+
   badge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    marginTop: 5,
+    minWidth: 26,
+    height: 26,
+    borderRadius: 13,
+    paddingHorizontal: 5,
     alignItems: "center",
     justifyContent: "center",
   },
+
   badgeText: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: "800",
   },
+
   rightCol: {
     flex: 1,
+    marginLeft: 10,
   },
-  matchupText: {
-    fontSize: 14,
-    color: "#374151",
-    marginBottom: 4,
+
+  line: {
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: COLORS.onSurface,
   },
-  boldText: {
+
+  lineBold: {
+    fontWeight: "800",
+    color: COLORS.onSurface,
+  },
+
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 6,
+    gap: 6,
+  },
+
+  tag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: COLORS.surfaceContainer,
+  },
+
+  tagDirection: {
+    backgroundColor: "#E8F5E9",
+  },
+
+  tagText: {
+    fontSize: 10.5,
     fontWeight: "700",
-    color: "#111827",
+    letterSpacing: 0.2,
+    color: COLORS.onSurfaceVariant,
   },
-  commentaryDetail: {
-    fontSize: 13,
-    color: "#4B5563",
-    lineHeight: 18,
-  },
-  directionTag: {
-    fontSize: 11,
-    color: "#059669",
-    fontWeight: "600",
-    marginTop: 4,
+
+  tagTextDirection: {
+    color: COLORS.primary,
   },
 });

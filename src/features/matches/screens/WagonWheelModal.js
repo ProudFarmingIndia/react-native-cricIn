@@ -16,18 +16,17 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 
 import useScoring from "../../scoring/hooks/useScoring";
 
+import { setPendingBallResult } from "../utils/ballHandoff";
+
 import { COLORS } from "../../../constants/colors";
 
-// Legacy handoff kept for backward compatibility. New flow hands the ball
-// result back through route params ({ __ballResult }) instead, so this module
-// variable is no longer set by WagonWheelModal — but LiveScoringScreen still
-// imports consumePendingBallResult, so we keep the export.
-let pendingBallResult = null;
-export const consumePendingBallResult = () => {
-  const r = pendingBallResult;
-  pendingBallResult = null;
-  return r;
-};
+/*
+| The handoff lives in utils/ballHandoff.js now - see the note there for why
+| route params could not carry it. Re-exported so any older import of
+| consumePendingBallResult from this file still resolves.
+*/
+
+export { consumePendingBallResult } from "../utils/ballHandoff";
 
 const FIELD_SIZE = Math.min(300, Dimensions.get("window").width - 80);
 const CENTER = FIELD_SIZE / 2;
@@ -55,10 +54,18 @@ export default function WagonWheelModal() {
 
   const route = useRoute();
 
-  const { matchId, inningsId, runs, batsmanId, bowlerId, shotType } =
-    route.params;
+  const { matchId: routeMatchId, inningsId: routeInningsId, runs, batsmanId, bowlerId, shotType } =
+  route.params || {};
+const matchId = routeMatchId;
+const inningsId = routeInningsId;
 
-  const { addBall, loading } = useScoring();
+  /*
+  | ballLoading, not loading: `loading` is shared by every scoring thunk in
+  | the app, so an unrelated request in flight made Confirm silently refuse
+  | to submit - no alert, no navigation, no ball recorded.
+  */
+
+  const { addBall, ballLoading } = useScoring();
 
   const [point, setPoint] = useState(null);
   const [selection, setSelection] = useState(null);
@@ -101,55 +108,79 @@ export default function WagonWheelModal() {
   const handleConfirm = async () => {
     console.log("[WagonWheel] handleConfirm START", {
       submitting,
-      loading,
+      ballLoading,
       selection,
       runs,
       inningsId,
     });
 
-    if (submitting || loading) return;
+    if (submitting || ballLoading) return;
 
     setSubmitting(true);
 
     try {
-      const result = await Promise.race([
-        addBall({
-          matchId,
-          inningsId,
-          batsmanId,
-          bowlerId,
-          runs,
-          shotType: shotType || "",
-          wagonWheel: selection
-            ? { angle: selection.angle, distance: selection.distance }
-            : { angle: null, distance: null },
-        }),
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error("Request timed out. Check your connection and try again.")),
-            15000,
-          ),
-        ),
-      ]);
+      /*
+      | NO Promise.race timeout here any more.
+      |
+      | The race rejected at 15 seconds but could not cancel the request, so
+      | on a slow connection the server still recorded the ball at ~16s
+      | while the scorer read "Request timed out - try again". Tapping
+      | Confirm again recorded the SAME delivery twice; not tapping it meant
+      | the late result was pushed into Redux with afterBall never running,
+      | so the over-complete, all-out and target checks were skipped for
+      | that ball entirely.
+      |
+      | A write that may have succeeded must not be presented as a failure.
+      | The request is allowed to finish and its real answer is used.
+      */
+
+      const result = await addBall({
+        matchId,
+        inningsId,
+        batsmanId,
+        bowlerId,
+        runs,
+        shotType: shotType || "",
+        /*
+        | region travels with the angle. It is already computed here for the
+        | on-screen label, and sending it means the server writes the zone
+        | name that was actually shown to the scorer - rather than
+        | re-deriving it later from the angle and risking a different answer
+        | if the zone boundaries are ever adjusted.
+        */
+        wagonWheel: {
+          angle: selection?.angle ?? null,
+          distance: selection?.distance ?? null,
+          region: selection?.region || "",
+        },
+      });
 
       console.log("[WagonWheel] addBall RESULT", result);
 
-      if (!result.success) {
-        Alert.alert("Failed", result.error || "Could not record that ball.");
+      if (!result?.success) {
+        Alert.alert("Failed", result?.error || "Could not record that ball.");
         return;
       }
 
-      // FIX: navigate back to LiveScoringScreen BY NAME (this pops
-      // ShotSelectionModal too, so it does NOT reappear) and hand the ball
-      // result through route params so afterBall() runs the over/all-out checks.
-      console.log("[WagonWheel] navigate to LiveScoringScreen with __ballResult");
-      navigation.navigate("LiveScoringScreen", { __ballResult: result });
-    } catch (e) {
-      console.log("[WagonWheel] handleConfirm ERROR", e?.message);
-      Alert.alert("Failed", e?.message || "Could not record that ball.");
-    } finally {
-      setSubmitting(false);
-    }
+      /*
+      | The result goes through the handoff module and the navigation
+      | carries NO params, so LiveScoringScreen's battingSquad, bowlingSquad
+      | and target survive - see utils/ballHandoff.js.
+      |
+      | Navigating by name (rather than goBack) also pops ShotSelectionModal
+      | underneath, so it does not reappear.
+      */
+
+      setPendingBallResult(result);
+
+      navigation.navigate("LiveScoringScreen");
+    } catch (err) {
+  const eText = err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
+  console.log("[WagonWheel] handleConfirm ERROR", eText);
+  Alert.alert("Failed", eText || "Could not record that ball.");
+} finally {
+  setSubmitting(false);
+}
   };
 
   return (
@@ -208,16 +239,29 @@ export default function WagonWheelModal() {
             <Text style={styles.resetText}>Reset</Text>
           </TouchableOpacity>
 
+          {/*
+          | Confirm stays disabled until the field has been tapped.
+          |
+          | It used to submit with selection === null, writing an empty
+          | region - so a ball whose direction was never chosen looked
+          | identical to one that had been recorded properly, and the
+          | commentary had nothing to say about where it went.
+          */}
           <TouchableOpacity
-            style={styles.confirmButton}
+            style={[
+              styles.confirmButton,
+              !selection && styles.confirmButtonDisabled,
+            ]}
             onPress={handleConfirm}
-            disabled={loading || submitting}
+            disabled={ballLoading || submitting || !selection}
           >
-            {loading || submitting ? (
+            {ballLoading || submitting ? (
               <ActivityIndicator size="small" color={COLORS.onPrimary} />
             ) : (
               <>
-                <Text style={styles.confirmText}>Confirm Direction</Text>
+                <Text style={styles.confirmText}>
+                  {selection ? "Confirm Direction" : "Tap the field first"}
+                </Text>
                 <Ionicons name="checkmark-circle" size={18} color={COLORS.onPrimary} />
               </>
             )}
@@ -369,6 +413,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  confirmButtonDisabled: {
+    opacity: 0.5,
   },
 
   confirmText: {

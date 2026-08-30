@@ -27,7 +27,20 @@ export default function AddPlayerScreen({ navigation, route }) {
     team,
     teamName: initialTeamName,
     showSuccessBanner = true,
+
+    /*
+    | "create" (default) - this is step 2 of creating a team, so the
+    |   primary button is "Review Team" and leads to TeamPreviewScreen.
+    | "manage" - opened from Team Details > Settings > Manage Players, so
+    |   the button is "Done" and returns to that Settings tab. Sending a
+    |   captain who just removed a player into the team-creation preview
+    |   made no sense.
+    */
+    mode = "create",
+    returnToTab = 4,
   } = route.params || {};
+
+  const isManageMode = mode === "manage";
 
   /*
   |--------------------------------------------------------------------------
@@ -78,12 +91,31 @@ export default function AddPlayerScreen({ navigation, route }) {
   const myPlayer = useSelector((state) => state.profile.profile);
 
   const ownerId = teamInfo?.userId?._id || teamInfo?.userId;
-  const isOwner = String(ownerId) === String(authUser?._id);
+
+  // Same fallback as TeamDetailsScreen - see the note there.
+  const myUserId =
+    authUser?._id || myPlayer?.userId?._id || myPlayer?.userId;
+
+  const isOwner = String(ownerId) === String(myUserId);
 
   const isCaptain = String(teamInfo?.captainId?._id) === String(myPlayer?._id);
-  const isViceCaptain = String(teamInfo?.viceCaptainId?._id) === String(myPlayer?._id);
+  const isViceCaptain =
+    String(teamInfo?.viceCaptainId?._id) === String(myPlayer?._id);
 
-  const canManage = isOwner || isCaptain || isViceCaptain;
+  /*
+  | Same per-right split as TeamDetailsScreen: a vice-captain only gets
+  | what the captain actually granted them. Removing a player needs
+  | canManagePlayers; inviting needs canSendInvitations, which the
+  | backend now enforces too (assertCanSendInvitations).
+  */
+
+  const vcRights = teamInfo?.viceCaptainRights || {};
+
+  const isLeader = isOwner || isCaptain;
+
+  const canManage = isLeader || (isViceCaptain && !!vcRights.canManagePlayers);
+
+  const canInvite = isLeader || (isViceCaptain && !!vcRights.canSendInvitations);
 
   /*
   |--------------------------------------------------------------------------
@@ -119,7 +151,16 @@ export default function AddPlayerScreen({ navigation, route }) {
   |--------------------------------------------------------------------------
   */
 
-  const handleReview = () => {
+  const handlePrimaryAction = () => {
+    if (isManageMode) {
+      navigation.navigate("TeamDetailsScreen", {
+        teamId,
+        initialTab: returnToTab,
+      });
+
+      return;
+    }
+
     navigation.navigate("TeamPreviewScreen", {
       teamData: teamInfo,
       players: squad,
@@ -133,7 +174,8 @@ export default function AddPlayerScreen({ navigation, route }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <StepIndicator currentStep={2} totalSteps={2} />
+        {/* The 2-step indicator belongs to the create flow only. */}
+        {!isManageMode && <StepIndicator currentStep={2} totalSteps={2} />}
 
         {showSuccessBanner && (
           <TeamSuccessBanner teamName={teamInfo?.teamName} />
@@ -148,6 +190,8 @@ export default function AddPlayerScreen({ navigation, route }) {
         <TeamSummaryCard teamData={teamInfo} players={squad} />
 
         <AddPlayerOptions
+          canInvite={canInvite}
+          canAddLocal={canManage}
           onInvitePlayer={() =>
             navigation.navigate("InvitePlayerScreen", {
               teamId,
@@ -170,14 +214,14 @@ export default function AddPlayerScreen({ navigation, route }) {
       </ScrollView>
 
       <TeamBottomActionBar
-        title="Review Team"
-        disabled={squad.length === 0}
+        title={isManageMode ? "Done" : "Review Team"}
+        disabled={!isManageMode && squad.length === 0}
         helperText={
-          squad.length === 0
+          !isManageMode && squad.length === 0
             ? "Add at least one player to continue."
             : undefined
         }
-        onPress={handleReview}
+        onPress={handlePrimaryAction}
       />
     </View>
   );

@@ -31,29 +31,54 @@ export default function ShotSelectionModal() {
   const [shotType, setShotType] = useState(null);
 
   const handleContinue = () => {
-    console.log("[ShotSelection] handleContinue", { shotType, runs, inningsId });
-    navigation.navigate("WagonWheelModal", {
-      matchId,
-      inningsId,
-      runs,
-      batsmanId,
-      bowlerId,
-      shotType,
-    });
-  };
+  const safeMatchId = route.params?.matchId;
+  const safeInningsId = route.params?.inningsId;
 
+  console.log("[ShotSelection] handleContinue", { shotType, runs, inningsId: safeInningsId });
+
+  if (!safeMatchId || !safeInningsId) {
+    console.warn("Missing match or innings", "Unable to continue because match or innings ID is missing.");
+    return;
+  }
+
+  navigation.navigate("WagonWheelModal", {
+    matchId: safeMatchId,
+    inningsId: safeInningsId,
+    runs,
+    batsmanId,
+    bowlerId,
+    shotType,
+  });
+};
+
+/*
+| Closing the sheet abandons the ball rather than recording a shotless one.
+|
+| Skipping used to save the delivery with shotType: null, which is how
+| half the commentary ended up reading "1 run." with nothing after it.
+| The scorer is choosing between describing the ball and not scoring it
+| yet - not between a full record and a hollow one.
+*/
+
+const onPressCancel = () => {
+  navigation.goBack();
+};
   return (
     <View style={styles.overlay}>
       <View style={styles.modal}>
         <View style={styles.header}>
           <Text style={styles.title}>Shot Selection</Text>
 
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={onPressCancel}>
             <Ionicons name="close" size={24} color={COLORS.onSurfaceVariant} />
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.subtitle}>What shot was played for {runs} run{runs !== 1 ? "s" : ""}?</Text>
+        <Text style={styles.subtitle}>
+          {runs === 0
+            ? "What shot was played? (no run)"
+            : `What shot was played for ${runs} run${runs !== 1 ? "s" : ""}?`}
+        </Text>
 
         <View style={styles.grid}>
           {SHOTS.map((shot) => (
@@ -82,13 +107,8 @@ export default function ShotSelectionModal() {
         </View>
 
         <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.skipButton}
-            onPress={() => navigation.navigate("WagonWheelModal", {
-              matchId, inningsId, runs, batsmanId, bowlerId, shotType: null,
-            })}
-          >
-            <Text style={styles.skipText}>Skip</Text>
+          <TouchableOpacity style={styles.skipButton} onPress={onPressCancel}>
+            <Text style={styles.skipText}>Cancel</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

@@ -1,15 +1,8 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback } from "react";
 
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-} from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import { useSelector } from "react-redux";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
 
@@ -19,30 +12,38 @@ import useTeam from "../../../teams/hooks/useTeam";
 
 import { COLORS } from "../../../../constants/colors";
 
+/*
+|--------------------------------------------------------------------------
+| TeamsTab
+|--------------------------------------------------------------------------
+|
+| Your teams, on your own profile. A plain list plus Create Team.
+|
+| The multi-select "Select" mode and its bulk Remove action have been
+| taken out. That action deleted every selected team you owned and left
+| the ones you had joined - a destructive, irreversible operation reached
+| by two taps from a list, with no per-team context and no undo.
+|
+| Deleting a team now lives in exactly one place: that team's own Settings
+| tab, next to Leave Team, where the team's name and squad are on screen
+| and the server can refuse if a match is in flight. Leaving lives in the
+| same place, so nothing is lost by dropping this shortcut.
+|
+*/
+
 export default function TeamsTab() {
   const navigation = useNavigation();
 
-  const { myTeams, loading, getMyTeams, deleteTeam, leaveTeam } = useTeam();
-
-  const authUser = useSelector((state) => state.auth.user);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Selection Mode
-  |--------------------------------------------------------------------------
-  */
-
-  const [selecting, setSelecting] = useState(false);
-
-  const [selectedIds, setSelectedIds] = useState([]);
+  const { myTeams, loading, getMyTeams } = useTeam();
 
   /*
   |--------------------------------------------------------------------------
   | Load Teams
   |--------------------------------------------------------------------------
   |
-  | useFocusEffect (not useEffect) so returning to this tab after creating
-  | or leaving a team always shows the current list, not a stale one.
+  | useFocusEffect (not useEffect) so returning to this tab after creating,
+  | leaving or deleting a team always shows the current list, not a stale
+  | one.
   |
   */
 
@@ -52,97 +53,14 @@ export default function TeamsTab() {
     }, [getMyTeams]),
   );
 
-  /*
-  |--------------------------------------------------------------------------
-  | Ownership
-  |--------------------------------------------------------------------------
-  */
-
-  const isOwnerOf = (team) => {
-    const ownerId = team?.userId?._id || team?.userId;
-    return String(ownerId) === String(authUser?._id);
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Selection Handlers
-  |--------------------------------------------------------------------------
-  */
-
-  const toggleSelecting = () => {
-    setSelecting((prev) => !prev);
-    setSelectedIds([]);
-  };
-
-  const toggleSelected = (teamId) => {
-    setSelectedIds((prev) =>
-      prev.includes(teamId)
-        ? prev.filter((id) => id !== teamId)
-        : [...prev, teamId],
-    );
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Bulk Delete / Leave
-  |--------------------------------------------------------------------------
-  |
-  | A single "Remove" action covers both cases - teams you own get
-  | deleted, teams you've just joined get left. Each selected team is
-  | resolved according to its own relationship to you, not a single
-  | global choice, since a multi-select batch can easily contain both.
-  |
-  */
-
-  const handleRemoveSelected = () => {
-    if (selectedIds.length === 0) return;
-
-    const selectedTeams = myTeams.filter((team) =>
-      selectedIds.includes(team._id),
-    );
-
-    const ownedCount = selectedTeams.filter(isOwnerOf).length;
-    const joinedCount = selectedTeams.length - ownedCount;
-
-    const parts = [];
-    if (ownedCount > 0) parts.push(`delete ${ownedCount} team(s) you own`);
-    if (joinedCount > 0) parts.push(`leave ${joinedCount} team(s) you've joined`);
-
-    Alert.alert(
-      "Remove Teams",
-      `This will ${parts.join(" and ")}. This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            for (const team of selectedTeams) {
-              if (isOwnerOf(team)) {
-                await deleteTeam(team._id);
-              } else {
-                await leaveTeam(team._id);
-              }
-            }
-
-            setSelecting(false);
-            setSelectedIds([]);
-          },
-        },
-      ],
-    );
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Create Team
-  |--------------------------------------------------------------------------
-  */
-
   const handleCreateTeam = () => {
     navigation.navigate("TeamStack", {
       screen: "CreateTeamScreen",
     });
+  };
+
+  const openTeam = (teamId) => {
+    navigation.navigate("TeamDetailsScreen", { teamId });
   };
 
   /*
@@ -157,7 +75,7 @@ export default function TeamsTab() {
         <Text style={styles.emptyTitle}>No Teams</Text>
 
         <Text style={styles.emptyDescription}>
-          You haven't joined any teams yet.
+          You haven&apos;t joined any teams yet.
         </Text>
 
         <TouchableOpacity
@@ -165,7 +83,13 @@ export default function TeamsTab() {
           activeOpacity={0.85}
           onPress={handleCreateTeam}
         >
-          <Ionicons name="add" size={18} color="#FFF" style={styles.buttonIcon} />
+          <Ionicons
+            name="add"
+            size={18}
+            color="#FFF"
+            style={styles.buttonIcon}
+          />
+
           <Text style={styles.createButtonText}>Create Team</Text>
         </TouchableOpacity>
       </View>
@@ -186,23 +110,14 @@ export default function TeamsTab() {
           activeOpacity={0.8}
           onPress={handleCreateTeam}
         >
-          <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} style={styles.headerActionIcon} />
-          <Text style={styles.headerActionText}>Create Team</Text>
-        </TouchableOpacity>
+          <Ionicons
+            name="add-circle-outline"
+            size={18}
+            color={COLORS.primary}
+            style={styles.headerActionIcon}
+          />
 
-        <TouchableOpacity
-          style={styles.headerAction}
-          activeOpacity={0.8}
-          onPress={toggleSelecting}
-        >
-          <Text
-            style={[
-              styles.headerActionText,
-              selecting && styles.headerActionTextActive,
-            ]}
-          >
-            {selecting ? "Cancel" : "Select"}
-          </Text>
+          <Text style={styles.headerActionText}>Create Team</Text>
         </TouchableOpacity>
       </View>
 
@@ -211,36 +126,10 @@ export default function TeamsTab() {
           <TeamCard
             key={item._id}
             team={item}
-            selectable={selecting}
-            selected={selectedIds.includes(item._id)}
-            onPress={() => {
-              if (selecting) {
-                toggleSelected(item._id);
-                return;
-              }
-
-              navigation.navigate("TeamDetailsScreen", {
-                teamId: item._id,
-              });
-            }}
+            onPress={() => openTeam(item._id)}
           />
         ))}
       </View>
-
-      {selecting && selectedIds.length > 0 && (
-        <View style={styles.actionBar}>
-          <TouchableOpacity
-            style={styles.removeButton}
-            activeOpacity={0.85}
-            onPress={handleRemoveSelected}
-          >
-            <Text style={styles.removeButtonText}>
-              Remove {selectedIds.length} Team
-              {selectedIds.length > 1 ? "s" : ""}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 }
@@ -260,7 +149,6 @@ const styles = StyleSheet.create({
 
   headerRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -277,32 +165,8 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
 
-  headerActionTextActive: {
-    color: COLORS.error,
-  },
-
   listContainer: {
     paddingBottom: 30,
-  },
-
-  actionBar: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    right: 16,
-  },
-
-  removeButton: {
-    backgroundColor: COLORS.error,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-
-  removeButtonText: {
-    color: "#FFF",
-    fontWeight: "700",
-    fontSize: 15,
   },
 
   emptyContainer: {

@@ -15,6 +15,8 @@ import { NOTIFICATION_TYPES } from "../constants/notificationTypes";
 
 import styles from "../styles/notification.styles";
 
+import { timeAgo } from "../../../utils/timeAgo";
+
 export default function NotificationCard({
   notification,
   onPress,
@@ -23,6 +25,15 @@ export default function NotificationCard({
 
   accepting = false,
   rejecting = false,
+
+  /*
+  | Multi-select. When `selecting` is on the whole card becomes a
+  | checkbox target and the inline Accept/Reject buttons are suppressed -
+  | tapping a row must mean one thing at a time.
+  */
+  selecting = false,
+  selected = false,
+  onToggleSelect,
 }) {
   /*
   |--------------------------------------------------------------------------
@@ -287,6 +298,71 @@ export default function NotificationCard({
 
       /*
       |--------------------------------------------------------------------------
+      | Follow Activity
+      |--------------------------------------------------------------------------
+      |
+      | Without these the six follow types all fell through to the grey
+      | default bell, which made a followed team's result look identical to
+      | a system message.
+      |
+      */
+
+      case NOTIFICATION_TYPES.NEW_FOLLOWER:
+        return {
+          library: Ionicons,
+          name: "person-add",
+          color: "#0d631b",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.FOLLOWED_MATCH_LIVE:
+        return {
+          library: Ionicons,
+          name: "radio",
+          color: "#BA1A1A",
+          background: "#FFDAD6",
+        };
+
+      case NOTIFICATION_TYPES.FOLLOWED_MATCH_RESULT:
+        return {
+          library: FontAwesome5,
+          name: "flag-checkered",
+          color: "#0d631b",
+          background: "#DCFCE7",
+        };
+
+      /*
+      | The award and the milestone share the trophy/medal family, but the
+      | award the player won themselves is gold - it is about them, not
+      | about someone they follow.
+      */
+
+      case NOTIFICATION_TYPES.PLAYER_OF_THE_MATCH:
+        return {
+          library: FontAwesome5,
+          name: "medal",
+          color: "#CA8A04",
+          background: "#FEF9C3",
+        };
+
+      case NOTIFICATION_TYPES.FOLLOWED_PLAYER_AWARD:
+        return {
+          library: FontAwesome5,
+          name: "medal",
+          color: "#8f4e00",
+          background: "#FFEDD5",
+        };
+
+      case NOTIFICATION_TYPES.FOLLOWED_PLAYER_MILESTONE:
+        return {
+          library: Ionicons,
+          name: "trending-up",
+          color: "#8f4e00",
+          background: "#FFEDD5",
+        };
+
+      /*
+      |--------------------------------------------------------------------------
       | Default
       |--------------------------------------------------------------------------
       */
@@ -333,7 +409,7 @@ export default function NotificationCard({
     NOTIFICATION_TYPES.MATCH_CONFIRMATION_REQUIRED,
   ];
 
-  const isInvitation = ACTIONABLE_TYPES.includes(type);
+  const isInvitation = ACTIONABLE_TYPES.includes(type) && !selecting;
 
   /*
   |--------------------------------------------------------------------------
@@ -344,9 +420,24 @@ export default function NotificationCard({
   return (
     <TouchableOpacity
       activeOpacity={0.9}
-      style={[styles.notificationCard, !isRead && styles.unreadNotification]}
-      onPress={() => onPress?.(notification)}
+      style={[
+        styles.notificationCard,
+        !isRead && styles.unreadNotification,
+        selected && styles.selectedNotification,
+      ]}
+      onPress={() =>
+        selecting
+          ? onToggleSelect?.(notification)
+          : onPress?.(notification)
+      }
+      onLongPress={() => onToggleSelect?.(notification)}
     >
+      {selecting && (
+        <View style={[styles.checkbox, selected && styles.checkboxOn]}>
+          {selected && <Text style={styles.checkboxTick}>✓</Text>}
+        </View>
+      )}
+
       {/* ------------------------------------------------------- */}
       {/* Left Icon */}
       {/* ------------------------------------------------------- */}
@@ -386,7 +477,8 @@ export default function NotificationCard({
         {/* Footer */}
 
         <View style={styles.footer}>
-          <Text style={styles.time}>{createdAt}</Text>
+          {/* was the raw ISO string straight from the API */}
+          <Text style={styles.time}>{timeAgo(createdAt)}</Text>
 
           {isInvitation && (
             <NotificationActionButtons

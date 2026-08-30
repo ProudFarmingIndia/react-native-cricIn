@@ -1,63 +1,25 @@
 import React from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  Image,
-} from "react-native";
 
-const highlights = [
-  {
-    title: "Kohli Stunning Century",
-    image:
-      "https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=1200",
-  },
-  {
-    title: "Bumrah Deadly Yorkers",
-    image:
-      "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1200",
-  },
-];
+import HighlightsFeed from "../../features/highlights/components/HighlightsFeed";
+
+/*
+|--------------------------------------------------------------------------
+| Highlights Tab (Matches Screen)
+|--------------------------------------------------------------------------
+|
+| Was two hardcoded Unsplash photos captioned "Kohli Stunning Century" and
+| "Bumrah Deadly Yorkers" - mock data that never touched the API.
+|
+| It is now the real feed: the top moments across CricIn, ranked, with a
+| Today / This Week / This Month / All Time filter. Everything is derived
+| from ball-by-ball scoring data, so there is no video to upload and the
+| tab fills itself as soon as anyone scores a match.
+|
+| The feed component is shared with MatchDetailsScreen, which passes a
+| matchId to scope it to one game.
+|
+*/
 
 export default function HighlightsTab() {
-  return (
-    <ScrollView contentContainerStyle={styles.scrollContent}>
-      {highlights.map((item, index) => (
-        <View key={index} style={styles.card}>
-          <Image
-            source={{ uri: item.image }}
-            style={styles.image}
-          />
-
-          <Text style={styles.title}>{item.title}</Text>
-        </View>
-      ))}
-    </ScrollView>
-  );
+  return <HighlightsFeed />;
 }
-
-const styles = StyleSheet.create({
-  scrollContent: {
-    paddingBottom: 120,
-  },
-
-  card: {
-    backgroundColor: "#fff",
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 18,
-    overflow: "hidden",
-  },
-
-  image: {
-    width: "100%",
-    height: 220,
-  },
-
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-    padding: 16,
-  },
-});

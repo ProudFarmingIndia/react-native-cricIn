@@ -9,6 +9,14 @@ import {
   acceptInvitation,
   rejectInvitation,
   setNotificationFilter,
+  fetchUnreadCount,
+  markManyAsRead,
+  deleteManyNotifications,
+  setUnreadOnly,
+  toggleSelected,
+  selectAll,
+  clearSelection,
+  setSelecting,
   clearNotificationError,
   clearNotificationSuccess,
   clearNotifications,
@@ -24,8 +32,17 @@ export default function useNotification() {
   |--------------------------------------------------------------------------
   */
 
-  const { notifications, unreadCount, loading, success, error, filter } =
-    useSelector((state) => state.notifications);
+  const {
+    notifications,
+    unreadCount,
+    loading,
+    success,
+    error,
+    filter,
+    unreadOnly,
+    selecting,
+    selectedIds,
+  } = useSelector((state) => state.notifications);
 
   /*
   |--------------------------------------------------------------------------
@@ -194,6 +211,12 @@ export default function useNotification() {
 
     filter,
 
+    unreadOnly,
+
+    selecting,
+
+    selectedIds,
+
     /*
     |--------------------------------------------------------------------------
     | APIs
@@ -201,6 +224,32 @@ export default function useNotification() {
     */
 
     getNotifications,
+
+    /*
+    | Count only - for the header badge, on screens that never load the
+    | full list.
+    */
+    getUnreadCount: () => dispatch(fetchUnreadCount()),
+
+    markManyAsRead: (ids) => dispatch(markManyAsRead(ids)),
+
+    deleteMany: (ids) => dispatch(deleteManyNotifications(ids)),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Selection & View
+    |--------------------------------------------------------------------------
+    */
+
+    setUnreadOnly: (value) => dispatch(setUnreadOnly(value)),
+
+    toggleSelected: (id) => dispatch(toggleSelected(id)),
+
+    selectAll: (ids) => dispatch(selectAll(ids)),
+
+    clearSelection: () => dispatch(clearSelection()),
+
+    setSelecting: (value) => dispatch(setSelecting(value)),
 
     markAsRead: readNotification,
 

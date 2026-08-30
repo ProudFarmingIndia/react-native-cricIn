@@ -26,4 +26,32 @@ export const COLORS = {
   onSuccess: "#ffffff",
   warning: "#ff8f04",
   onWarning: "#ffffff",
+
+  /*
+  |--------------------------------------------------------------------------
+  | Compatibility Aliases
+  |--------------------------------------------------------------------------
+  |
+  | These seven names are used in roughly 40 places across the app -
+  | HomeScreen, LoginScreen, OtpScreen, ShopScreen, GroundsScreen, the
+  | search cards, the notification styles - but were never defined here.
+  | They resolved to `undefined`, so those elements silently fell back to
+  | platform defaults, which is why several screens carry their own local
+  | colour objects.
+  |
+  | Mapped onto the Material tokens above rather than introducing new
+  | values, so the palette stays a single system.
+  |
+  | For new code prefer the tokens directly: onSurface over text,
+  | onSurfaceVariant over textLight, surfaceContainerLowest over card.
+  |
+  */
+
+  text: "#181d17", // = onSurface
+  textPrimary: "#181d17", // = onSurface
+  textLight: "#40493d", // = onSurfaceVariant
+  textSecondary: "#40493d", // = onSurfaceVariant
+  border: "#bfcaba", // = outlineVariant
+  card: "#ffffff", // = surfaceContainerLowest
+  surfaceVariant: "#e0e4da", // = surfaceContainerHighest
 };

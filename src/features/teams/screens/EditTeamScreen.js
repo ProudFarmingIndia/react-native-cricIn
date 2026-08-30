@@ -12,6 +12,7 @@ import { COLORS } from "../../../constants/colors";
 
 import useTeam from "../hooks/useTeam";
 import useCreateTeam from "../hooks/useCreateTeam";
+import useUpload from "../../upload/hooks/useUpload";
 
 import TeamLogoUploader from "../components/TeamLogoUploader";
 import TeamBasicInfoSection from "../components/TeamBasicInfoSection";
@@ -33,7 +34,17 @@ import TeamBottomActionBar from "../components/TeamBottomActionBar";
 */
 
 export default function EditTeamScreen({ navigation, route }) {
-  const { teamId, team: teamFromParams } = route.params || {};
+  const {
+    teamId,
+    team: teamFromParams,
+
+    /*
+    | Which TeamDetailsScreen tab to land on after saving. Settings sent
+    | the user here, so Settings is where they expect to come back to -
+    | a plain goBack() would drop them on Overview instead.
+    */
+    returnToTab = 4,
+  } = route.params || {};
 
   /*
   |--------------------------------------------------------------------------
@@ -45,7 +56,26 @@ export default function EditTeamScreen({ navigation, route }) {
 
   const team = teamFromParams || currentTeam;
 
-  const [initialized, setInitialized] = useState(!!teamFromParams);
+  /*
+  |--------------------------------------------------------------------------
+  | Prefill Guard
+  |--------------------------------------------------------------------------
+  |
+  | This MUST start false.
+  |
+  | It used to be useState(!!teamFromParams), and TeamDetailsScreen always
+  | passes `team` in the route params - so it started true. The prefill
+  | effect below is guarded on `!initialized`, so it never ran, and the
+  | form opened completely blank on a screen whose entire job is editing
+  | existing values.
+  |
+  | Its only real purpose is "fill the fields exactly once", so that
+  | re-renders, or a late currentTeam arriving from the API, don't stomp
+  | on what the user has already typed.
+  |
+  */
+
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (!teamFromParams && teamId) {
@@ -53,7 +83,31 @@ export default function EditTeamScreen({ navigation, route }) {
     }
   }, [teamFromParams, teamId, getTeamById]);
 
-  const { teamData, updateField, pickLogo, validate, setTeamData } =
+  const { uploading, pickImage } = useUpload();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Logo
+  |--------------------------------------------------------------------------
+  |
+  | teamData.logo is only ever a display URL, because that is what
+  | TeamLogoUploader renders. The SERVER field is an object
+  | ({ url, publicId }), so a bare string sent as `logo` is a Mongoose
+  | cast error and the whole save fails.
+  |
+  | So the uploaded asset is kept separately and only merged into the
+  | payload when the user actually picked a new image. If they didn't,
+  | `logo` is left out of the update entirely and the existing one is
+  | preserved.
+  |
+  | useCreateTeam's own pickLogo only flips a `showLogoOptions` flag that
+  | nothing renders, so tapping the logo here previously did nothing at all.
+  |
+  */
+
+  const [logoAsset, setLogoAsset] = useState(null);
+
+  const { teamData, updateField, validate, setTeamData } =
     useCreateTeam({
       logo: null,
       teamName: "",
@@ -96,6 +150,16 @@ export default function EditTeamScreen({ navigation, route }) {
   |--------------------------------------------------------------------------
   */
 
+  const handlePickLogo = async () => {
+    const asset = await pickImage("teams/logo");
+
+    if (!asset?.url) return;
+
+    setLogoAsset({ url: asset.url, publicId: asset.publicId });
+
+    updateField("logo", asset.url);
+  };
+
   const handleSave = async () => {
     const result = validate();
 
@@ -105,10 +169,28 @@ export default function EditTeamScreen({ navigation, route }) {
     }
 
     try {
-      const response = await updateTeam(teamId, teamData);
+      /*
+      | Drop the display-only `logo` string, then add the real object
+      | back only if a new image was uploaded in this session.
+      */
+      const { logo: _displayLogo, ...payload } = teamData;
+
+      if (logoAsset) {
+        payload.logo = logoAsset;
+      }
+
+      const response = await updateTeam(teamId, payload);
 
       if (response?.success !== false) {
-        navigation.goBack();
+        /*
+        | navigate (not push) - TeamDetailsScreen is already behind this
+        | screen in the stack, so this pops back to it and merges the new
+        | params rather than stacking a second copy.
+        */
+        navigation.navigate("TeamDetailsScreen", {
+          teamId,
+          initialTab: returnToTab,
+        });
       } else {
         Alert.alert(
           "Update Failed",
@@ -138,7 +220,7 @@ export default function EditTeamScreen({ navigation, route }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <TeamLogoUploader logo={teamData.logo} onPress={pickLogo} />
+        <TeamLogoUploader logo={teamData.logo} onPress={handlePickLogo} />
 
         <TeamBasicInfoSection teamData={teamData} updateField={updateField} />
 
@@ -153,7 +235,7 @@ export default function EditTeamScreen({ navigation, route }) {
       </ScrollView>
 
       <TeamBottomActionBar
-        loading={loading}
+        loading={loading || uploading}
         title="Save Changes"
         onPress={handleSave}
       />

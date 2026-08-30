@@ -11,7 +11,8 @@ import {
   removePlayerFromTeamApi,
   leaveTeamApi,
   setTeamCaptainApi,
-  setViceCaptainApi,
+  revokeViceCaptainApi,
+  updateViceCaptainRightsApi,
   updateTeamStatsApi,
   createLocalPlayerApi,
 } from "../services/team.service";
@@ -234,11 +235,34 @@ export const setCaptain = createAsyncThunk(
 |--------------------------------------------------------------------------
 */
 
-export const setViceCaptain = createAsyncThunk(
-  "team/setViceCaptain",
-  async ({ teamId, viceCaptainId }, thunkAPI) => {
+/*
+| There is deliberately no setViceCaptain thunk. This used to import
+| setViceCaptainApi, which team.service.js never exported - so the import
+| resolved to undefined and the thunk threw the moment it ran.
+|
+| Assigning a vice-captain is not a direct write anyway: it goes through
+| viceCaptainProposal.service.js, because the candidate has to accept.
+| Only the two operations below are direct, and both have real endpoints.
+*/
+
+export const revokeViceCaptain = createAsyncThunk(
+  "team/revokeViceCaptain",
+  async (teamId, thunkAPI) => {
     try {
-      return await setViceCaptainApi(teamId, viceCaptainId);
+      return await revokeViceCaptainApi(teamId);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message,
+      );
+    }
+  },
+);
+
+export const updateViceCaptainRights = createAsyncThunk(
+  "team/updateViceCaptainRights",
+  async ({ teamId, rights }, thunkAPI) => {
+    try {
+      return await updateViceCaptainRightsApi(teamId, rights);
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || error.message,
@@ -351,7 +375,8 @@ const teamSlice = createSlice({
       .addCase(addPlayerToTeam.pending, pendingReducer)
       .addCase(removePlayerFromTeam.pending, pendingReducer)
       .addCase(setCaptain.pending, pendingReducer)
-      .addCase(setViceCaptain.pending, pendingReducer)
+      .addCase(revokeViceCaptain.pending, pendingReducer)
+      .addCase(updateViceCaptainRights.pending, pendingReducer)
       .addCase(updateTeamStats.pending, pendingReducer)
       .addCase(createLocalPlayer.pending, pendingReducer)
 
@@ -371,7 +396,8 @@ const teamSlice = createSlice({
       .addCase(addPlayerToTeam.rejected, rejectedReducer)
       .addCase(removePlayerFromTeam.rejected, rejectedReducer)
       .addCase(setCaptain.rejected, rejectedReducer)
-      .addCase(setViceCaptain.rejected, rejectedReducer)
+      .addCase(revokeViceCaptain.rejected, rejectedReducer)
+      .addCase(updateViceCaptainRights.rejected, rejectedReducer)
       .addCase(updateTeamStats.rejected, rejectedReducer)
       .addCase(createLocalPlayer.rejected, rejectedReducer)
 
@@ -496,7 +522,16 @@ const teamSlice = createSlice({
         syncTeam(state, action.payload);
       })
 
-      .addCase(setViceCaptain.fulfilled, (state, action) => {
+      .addCase(revokeViceCaptain.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+
+        if (!action.payload) return;
+
+        syncTeam(state, action.payload);
+      })
+
+      .addCase(updateViceCaptainRights.fulfilled, (state, action) => {
         state.loading = false;
         state.success = true;
 

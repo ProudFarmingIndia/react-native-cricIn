@@ -104,35 +104,45 @@ export default function QuickScoreStackNavigator() {
         // }}
       />
 
+      {/*
+      | 7, 8, 9 - THE THREE SCREENS YOU MUST NOT SWIPE AWAY FROM
+      |
+      | Each of these exists because the scorer owes the match a decision,
+      | and each one used to be dismissible with a back-swipe:
+      |
+      |   OverSummary asks for the next bowler. Backing out left
+      |   currentBowlerId on the bowler who had just finished, so the whole
+      |   next over was recorded against him with no warning.
+      |
+      |   InningsSummary and SecondInnings sit AFTER the innings has been
+      |   ended on the server. Backing out landed on a live-looking scoring
+      |   pad whose buttons still worked, posting balls into a closed
+      |   innings - every one of them rejected.
+      |
+      | gestureEnabled: false stops the swipe, and headerLeft: () => null
+      | removes the back arrow, so the only way on is the button that
+      | actually records the decision.
+      */}
+
       {/* 7 */}
       <Stack.Screen
         name="OverSummaryScreen"
         component={OverSummaryScreen}
-        // options={{
-        //   header: () => <AppHeader title="Over Summary" showBack />,
-        // }}
+        options={{ gestureEnabled: false, headerLeft: () => null }}
       />
 
       {/* 8 */}
       <Stack.Screen
         name="InningsSummaryScreen"
         component={InningsSummaryScreen}
-        // options={{
-        //   gestureEnabled: false,
-
-        //   header: () => <AppHeader title="Innings Summary" showBack={false} />,
-        // }}
+        options={{ gestureEnabled: false, headerLeft: () => null }}
       />
 
       {/* 9 */}
       <Stack.Screen
         name="SecondInningsScreen"
         component={SecondInningsScreen}
-        // options={{
-        //   gestureEnabled: false,
-
-        //   header: () => <AppHeader title="Second Innings" showBack={false} />,
-        // }}
+        options={{ gestureEnabled: false, headerLeft: () => null }}
       />
 
       {/* 10 */}

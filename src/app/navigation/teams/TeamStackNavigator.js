@@ -15,7 +15,14 @@ import ChallengeMatchScreen from "../../../features/teams/screens/ChallengeMatch
 import FindTeamsScreen from "../../../features/teams/screens/FindTeamsScreen";
 import TeamProfileScreen from "../../../features/teams/screens/TeamProfileScreen";
 
-
+/*
+| TeamDetailsScreen is also registered in ProfileStackNavigator. It is
+| registered here too so that opening a team from a player's Teams tab is
+| a push inside THIS stack - Back then returns to the player profile.
+| Routing it through the Profile tab instead would yank the user out of
+| the team flow and leave a confusing back stack.
+*/
+import TeamDetailsScreen from "../../../features/teams/screens/TeamDetailsScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -41,6 +48,7 @@ export default function TeamStackNavigator() {
         component={AddLocalPlayerScreen}
       />
       <Stack.Screen name="TeamPreviewScreen" component={TeamPreviewScreen} />
+      <Stack.Screen name="TeamDetailsScreen" component={TeamDetailsScreen} />
       <Stack.Screen name="TeamProfileScreen" component={TeamProfileScreen} />
       <Stack.Screen name="FindTeamsScreen" component={FindTeamsScreen} />
       <Stack.Screen

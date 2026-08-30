@@ -14,6 +14,10 @@ const initialState = {
   currentInnings: null,
   balls: [],
   loading: false,
+
+  // Just the delivery round trip - see ballPending below.
+  ballLoading: false,
+
   error: null,
   success: false,
 };
@@ -133,6 +137,7 @@ const scoringSlice = createSlice({
       state.currentInnings = null;
       state.balls = [];
       state.loading = false;
+      state.ballLoading = false;
       state.error = null;
       state.success = false;
     },
@@ -142,6 +147,24 @@ const scoringSlice = createSlice({
       state.loading = true;
       state.success = false;
       state.error = null;
+    };
+
+    /*
+    | `loading` is one flag shared by every scoring thunk from every screen,
+    | so a slow endInnings elsewhere made the wagon wheel's Confirm button
+    | silently refuse to submit.
+    |
+    | `ballLoading` tracks only the delivery round trip, which is the one
+    | thing a scoring modal actually needs to know about.
+    */
+
+    const ballPending = (state) => {
+      pendingReducer(state);
+      state.ballLoading = true;
+    };
+
+    const ballSettled = (state) => {
+      state.ballLoading = false;
     };
 
     const rejectedReducer = (state, action) => {
@@ -154,7 +177,7 @@ const scoringSlice = createSlice({
       .addCase(createInnings.pending, pendingReducer)
       .addCase(getInningsById.pending, pendingReducer)
       .addCase(endInnings.pending, pendingReducer)
-      .addCase(addBall.pending, pendingReducer)
+      .addCase(addBall.pending, ballPending)
       .addCase(setNextBatsman.pending, pendingReducer)
       .addCase(setNextBowler.pending, pendingReducer)
       .addCase(undoLastBall.pending, pendingReducer)
@@ -163,7 +186,10 @@ const scoringSlice = createSlice({
       .addCase(createInnings.rejected, rejectedReducer)
       .addCase(getInningsById.rejected, rejectedReducer)
       .addCase(endInnings.rejected, rejectedReducer)
-      .addCase(addBall.rejected, rejectedReducer)
+      .addCase(addBall.rejected, (state, action) => {
+        rejectedReducer(state, action);
+        ballSettled(state);
+      })
       .addCase(setNextBatsman.rejected, rejectedReducer)
       .addCase(setNextBowler.rejected, rejectedReducer)
       .addCase(undoLastBall.rejected, rejectedReducer)
@@ -188,6 +214,7 @@ const scoringSlice = createSlice({
       .addCase(addBall.fulfilled, (state, action) => {
         state.loading = false;
         state.success = true;
+        ballSettled(state);
 
         const { ball, innings } = action.payload || {};
         if (innings) state.currentInnings = innings;
@@ -219,11 +246,21 @@ const scoringSlice = createSlice({
           state.currentInnings = action.payload;
         }
 
-        // Remove undone ball from local state array
+        /*
+        | Remove the undone ball from the local list.
+        |
+        | The fallback used to be shift(), which removes the OLDEST ball -
+        | but balls are appended chronologically with push(), so the newest
+        | is at the END. Undoing 6.4 deleted the first delivery of the
+        | innings instead and left 6.4 in place, so the commentary, both
+        | batters' figures and the over list were all wrong until the next
+        | full refetch.
+        */
+
         if (removed && removed._id) {
           state.balls = state.balls.filter((b) => b._id !== removed._id);
         } else {
-          state.balls.shift(); // Remove top delivery
+          state.balls.pop();
         }
       })
       .addCase(getInningsScorecard.fulfilled, (state, action) => {

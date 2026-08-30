@@ -4,6 +4,7 @@ import {
   ScrollView,
   View,
   ActivityIndicator,
+  Alert,
   StyleSheet,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
@@ -40,6 +41,11 @@ export default function EditProfileScreen() {
 
   const [profile, setProfile] = useState({
     profileImage: {
+      url: "",
+      publicId: "",
+    },
+
+    coverPhoto: {
       url: "",
       publicId: "",
     },
@@ -98,8 +104,19 @@ export default function EditProfileScreen() {
 
         const result = await dispatch(getProfile());
 
-        if (getProfile.fulfilled.match(result)) {
-          setProfile(result.payload.data);
+        /*
+        | getProfile resolves with { success: true, data: null } for a user
+        | who has no player profile yet - that is the expected shape for a
+        | brand-new account, not an error. setProfile(null) then wiped the
+        | local form object, and the next gallery upload threw on
+        | `...profile.gallery`. Keep the blank initial state instead.
+        */
+
+        if (getProfile.fulfilled.match(result) && result.payload?.data) {
+          setProfile((previous) => ({
+            ...previous,
+            ...result.payload.data,
+          }));
         }
       } catch (error) {
         console.log(error);
@@ -150,7 +167,7 @@ export default function EditProfileScreen() {
     if (!uploadedImage) return;
 
     updateField("gallery", [
-      ...profile.gallery,
+      ...(profile?.gallery || []),
 
       {
         type: "IMAGE",
@@ -176,7 +193,7 @@ export default function EditProfileScreen() {
     if (!uploadedVideo) return;
 
     updateField("gallery", [
-      ...profile.gallery,
+      ...(profile?.gallery || []),
 
       {
         type: "VIDEO",
@@ -202,25 +219,52 @@ export default function EditProfileScreen() {
   |--------------------------------------------------------------------------
   */
 
+  /*
+  |--------------------------------------------------------------------------
+  | Payload
+  |--------------------------------------------------------------------------
+  |
+  | gender is an enum on the server ("Male" | "Female" | "Other"). The blank
+  | form value is "", which is not one of them, so sending it verbatim fails
+  | validation for anyone who hasn't picked a gender. Omitting the key lets
+  | the schema default apply instead.
+  |
+  */
+
+  const buildPayload = () => {
+    const payload = {
+      ...profile,
+      playerName: profile?.playerName || "",
+    };
+
+    if (!payload.gender) {
+      delete payload.gender;
+    }
+
+    return payload;
+  };
+
   const createProfile = async () => {
     try {
-      const payload = {
-        ...profile,
-
-        playerName: profile.playerName || "",
-      };
-
-      const result = await dispatch(createPlayerProfile(payload));
+      const result = await dispatch(createPlayerProfile(buildPayload()));
 
       if (createPlayerProfile.fulfilled.match(result)) {
         await dispatch(getProfile());
-
-        navigation.goBack();
-      } else {
-        console.log(result.payload);
+        return true;
       }
+
+      Alert.alert(
+        "Could Not Create Profile",
+        result.payload?.message || "Please check your details and try again.",
+      );
+
+      return false;
     } catch (error) {
       console.log(error);
+
+      Alert.alert("Could Not Create Profile", error?.message || "Try again.");
+
+      return false;
     }
   };
 
@@ -232,17 +276,25 @@ export default function EditProfileScreen() {
 
   const updateExistingProfile = async () => {
     try {
-      const result = await dispatch(updateProfile(profile));
+      const result = await dispatch(updateProfile(buildPayload()));
 
       if (updateProfile.fulfilled.match(result)) {
         await dispatch(getProfile());
-
-        navigation.goBack();
-      } else {
-        console.log(result.payload);
+        return true;
       }
+
+      Alert.alert(
+        "Could Not Save Profile",
+        result.payload?.message || "Please check your details and try again.",
+      );
+
+      return false;
     } catch (error) {
       console.log(error);
+
+      Alert.alert("Could Not Save Profile", error?.message || "Try again.");
+
+      return false;
     }
   };
 
@@ -252,16 +304,27 @@ export default function EditProfileScreen() {
   |--------------------------------------------------------------------------
   */
 
+  /*
+  | Both helpers used to call navigation.goBack() themselves AND this
+  | function then called navigation.replace("ProfileScreen") unconditionally
+  | - two navigations per save, and the replace fired even when the save had
+  | failed, so an error looked like a success. Navigation now happens once,
+  | here, and only when the save actually succeeded.
+  */
+
   const handleSave = async () => {
+    if (saving || uploading) return;
+
     try {
       setSaving(true);
 
-      if (isCreated) {
-        await updateExistingProfile();
-      } else {
-        await createProfile();
+      const succeeded = isCreated
+        ? await updateExistingProfile()
+        : await createProfile();
+
+      if (succeeded) {
+        navigation.replace("ProfileScreen");
       }
-      navigation.replace("ProfileScreen");
     } catch (error) {
       console.log(error);
     } finally {
@@ -375,6 +438,8 @@ export default function EditProfileScreen() {
                   ? "Save Changes"
                   : "Create Profile"
             }
+            loading={saving}
+            disabled={saving || uploading}
             onPress={handleSave}
           />
         </View>

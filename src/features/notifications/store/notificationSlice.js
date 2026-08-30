@@ -13,6 +13,9 @@ import {
   rejectChallengeNotifApi,
   confirmMatchNotifApi,
   rejectMatchConfirmationNotifApi,
+  getUnreadCountApi,
+  markManyAsReadApi,
+  deleteManyApi,
 } from "../services/notification.service";
 
 /*
@@ -28,6 +31,13 @@ const initialState = {
   success: false,
   error: null,
   filter: "ALL",
+
+  // Show only unread, combinable with `filter`.
+  unreadOnly: false,
+
+  // Multi-select mode for bulk mark-read / delete.
+  selecting: false,
+  selectedIds: [],
 };
 
 /*
@@ -42,6 +52,65 @@ export const fetchNotifications = createAsyncThunk(
       return await getNotificationsApi();
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Failed to load notifications.");
+    }
+  },
+);
+
+/*
+|--------------------------------------------------------------------------
+| Unread Count
+|--------------------------------------------------------------------------
+|
+| The badge in the header needs the count WITHOUT pulling the full list -
+| every screen shows the bell, and refetching every notification on each
+| screen focus to derive a number would be wasteful.
+|
+| getUnreadCountApi existed but had no thunk, so nothing ever called it.
+|
+*/
+export const fetchUnreadCount = createAsyncThunk(
+  "notifications/unreadCount",
+  async (_, { rejectWithValue }) => {
+    try {
+      const data = await getUnreadCountApi();
+      return data?.unreadCount ?? 0;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to load unread count.",
+      );
+    }
+  },
+);
+
+/*
+|--------------------------------------------------------------------------
+| Bulk Actions
+|--------------------------------------------------------------------------
+*/
+export const markManyAsRead = createAsyncThunk(
+  "notifications/readMany",
+  async (ids, { rejectWithValue }) => {
+    try {
+      await markManyAsReadApi(ids);
+      return ids;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to update notifications.",
+      );
+    }
+  },
+);
+
+export const deleteManyNotifications = createAsyncThunk(
+  "notifications/deleteMany",
+  async (ids, { rejectWithValue }) => {
+    try {
+      await deleteManyApi(ids);
+      return ids;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to delete notifications.",
+      );
     }
   },
 );
@@ -231,6 +300,71 @@ const notificationSlice = createSlice({
     setNotificationFilter(state, action) {
       state.filter = action.payload;
     },
+
+    /*
+    | A notification arrived over the socket. The server emits the whole
+    | document, so it can be inserted directly - refetching the entire
+    | list to learn about one new row would be wasteful and would also
+    | wipe any in-flight selection.
+    |
+    | Guarded against duplicates: a push and a socket event can both land
+    | for the same notification.
+    */
+    notificationReceived(state, action) {
+      const incoming = action.payload;
+
+      if (!incoming?._id) return;
+
+      const exists = state.notifications.some(
+        (notification) => notification._id === incoming._id,
+      );
+
+      if (exists) return;
+
+      state.notifications.unshift(incoming);
+
+      if (!incoming.isRead) {
+        state.unreadCount += 1;
+      }
+    },
+
+    /*
+    | Show-unread-only toggle, independent of the category filter so the
+    | two can be combined ("unread Invitations").
+    */
+    setUnreadOnly(state, action) {
+      state.unreadOnly = !!action.payload;
+    },
+
+    /*
+    | Multi-select. Kept in the store rather than screen state so the
+    | selection survives a refetch triggered by an accept/reject.
+    */
+    toggleSelected(state, action) {
+      const id = action.payload;
+
+      state.selectedIds = state.selectedIds.includes(id)
+        ? state.selectedIds.filter((selected) => selected !== id)
+        : [...state.selectedIds, id];
+    },
+
+    selectAll(state, action) {
+      state.selectedIds = action.payload || [];
+    },
+
+    clearSelection(state) {
+      state.selectedIds = [];
+      state.selecting = false;
+    },
+
+    setSelecting(state, action) {
+      state.selecting = !!action.payload;
+
+      if (!action.payload) {
+        state.selectedIds = [];
+      }
+    },
+
     clearNotificationError(state) {
       state.error = null;
     },
@@ -269,6 +403,53 @@ const notificationSlice = createSlice({
         state.success = true;
         state.notifications = action.payload || [];
         state.unreadCount = recomputeUnread(state.notifications);
+
+        // Drop selections whose rows no longer exist after a refetch.
+        const ids = new Set(state.notifications.map((n) => n._id));
+        state.selectedIds = state.selectedIds.filter((id) => ids.has(id));
+      })
+
+      /*
+      | Unread count comes straight from the server and is NOT recomputed
+      | from `notifications` - the header needs it on screens that have
+      | never loaded the list.
+      */
+      .addCase(fetchUnreadCount.fulfilled, (state, action) => {
+        state.unreadCount = action.payload ?? 0;
+      })
+
+      // ── Bulk ──────────────────────────────────────────────────────────
+
+      .addCase(markManyAsRead.pending, markLoading)
+      .addCase(markManyAsRead.rejected, markError)
+      .addCase(markManyAsRead.fulfilled, (state, action) => {
+        state.loading = false;
+
+        const ids = new Set(action.payload || []);
+
+        state.notifications.forEach((notification) => {
+          if (ids.has(notification._id)) notification.isRead = true;
+        });
+
+        state.unreadCount = recomputeUnread(state.notifications);
+        state.selectedIds = [];
+        state.selecting = false;
+      })
+
+      .addCase(deleteManyNotifications.pending, markLoading)
+      .addCase(deleteManyNotifications.rejected, markError)
+      .addCase(deleteManyNotifications.fulfilled, (state, action) => {
+        state.loading = false;
+
+        const ids = new Set(action.payload || []);
+
+        state.notifications = state.notifications.filter(
+          (notification) => !ids.has(notification._id),
+        );
+
+        state.unreadCount = recomputeUnread(state.notifications);
+        state.selectedIds = [];
+        state.selecting = false;
       })
 
       // ── Mark Read ─────────────────────────────────────────────────────
@@ -381,6 +562,12 @@ const notificationSlice = createSlice({
 });
 
 export const {
+  notificationReceived,
+  setUnreadOnly,
+  toggleSelected,
+  selectAll,
+  clearSelection,
+  setSelecting,
   setNotificationFilter,
   clearNotificationError,
   clearNotificationSuccess,
