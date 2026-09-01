@@ -11,15 +11,20 @@ export default function Header({
   showSearch = false,
   showChat = false,
   showNotification = false,
+
+  /*
+  | Unread badge on the bell. The count lived in the notifications slice
+  | from the start but was rendered nowhere - the bell gave no hint that
+  | anything was waiting.
+  */
+  notificationCount = 0,
+
   onMenuPress,
   onBackPress,
   onSearchPress,
   onChatPress,
   onNotificationPress,
 }) {
-  console.log(
-  "Header Rendered"
-);
   return (
     <View style={styles.header}>
       <View style={styles.logoRow}>
@@ -64,8 +69,21 @@ export default function Header({
           <TouchableOpacity
             style={styles.iconButton}
             onPress={onNotificationPress}
+            accessibilityLabel={
+              notificationCount > 0
+                ? `Notifications, ${notificationCount} unread`
+                : "Notifications"
+            }
           >
             <MaterialIcons name="notifications" size={20} color="#222" />
+
+            {notificationCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {notificationCount > 99 ? "99+" : notificationCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -111,5 +129,27 @@ const styles = StyleSheet.create({
   },
   showbck : {
     marginRight : 10
+  },
+
+  badge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: COLORS.error,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+
+  badgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 13,
   }
 });

@@ -4,6 +4,7 @@ import {
   View,
   TouchableOpacity,
   Text,
+  StyleSheet,
 } from "react-native";
 
 export default function TeamTabs({
@@ -11,38 +12,18 @@ export default function TeamTabs({
   setActiveTab,
 }) {
   return (
-    <View
-      style={{
-        flexDirection:
-          "row",
-        marginBottom: 20,
-      }}
-    >
+    <View style={styles.container}>
       {[
         "players",
         "matches",
         "stats",
-      ].map(tab => (
+      ].map((tab) => (
         <TouchableOpacity
           key={tab}
-          onPress={() =>
-            setActiveTab(
-              tab
-            )
-          }
-          style={{
-            marginRight: 20,
-          }}
+          onPress={() => setActiveTab(tab)}
+          style={styles.tabButton}
         >
-          <Text
-            style={{
-              fontWeight:
-                activeTab ===
-                tab
-                  ? "700"
-                  : "400",
-            }}
-          >
+          <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
             {tab.toUpperCase()}
           </Text>
         </TouchableOpacity>
@@ -50,3 +31,19 @@ export default function TeamTabs({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    marginBottom: 20,
+  },
+  tabButton: {
+    marginRight: 20,
+  },
+  tabText: {
+    fontWeight: "400",
+  },
+  activeTabText: {
+    fontWeight: "700",
+  },
+});

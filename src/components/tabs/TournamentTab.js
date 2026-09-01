@@ -16,7 +16,7 @@ const tournaments = [
 
 export default function TournamentTab() {
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+    <ScrollView contentContainerStyle={styles.scrollContent}>
       {tournaments.map((item, index) => (
         <View key={index} style={styles.card}>
           <Text style={styles.title}>{item}</Text>
@@ -30,6 +30,10 @@ export default function TournamentTab() {
 }
 
 const styles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 120,
+  },
+
   card: {
     backgroundColor: "#fff",
     marginHorizontal: 16,

@@ -60,9 +60,7 @@ export default function PlayerCard({
             }
           >
             <Text
-              style={{
-                color: "red",
-              }}
+              style={styles.removeText}
             >
               Remove
             </Text>
@@ -89,5 +87,9 @@ const styles = StyleSheet.create({
   name: {
     fontWeight: "700",
     fontSize: 16,
+  },
+
+  removeText: {
+    color: "red",
   },
 });

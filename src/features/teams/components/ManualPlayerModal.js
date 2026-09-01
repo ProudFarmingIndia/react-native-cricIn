@@ -88,10 +88,7 @@ export default function ManualPlayerModal({
             onPress={handleAdd}
           >
             <Text
-              style={{
-                color:
-                  "#fff",
-              }}
+              style={styles.buttonText}
             >
               Add Player
             </Text>
@@ -139,5 +136,9 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 10,
     alignItems: "center",
+  },
+
+  buttonText: {
+    color: "#fff",
   },
 });

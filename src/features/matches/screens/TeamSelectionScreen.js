@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import {
   View,
@@ -8,34 +8,28 @@ import {
   FlatList,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
 
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+import useTeam from "../../teams/hooks/useTeam";
+import { createMatchApi } from "../services/matches.services";
+
 import { COLORS } from "../../../constants/colors";
 
-const MOCK_TEAMS = [
-  {
-    _id: "1",
-    name: "Lions XI",
-    city: "Mumbai",
-  },
-  {
-    _id: "2",
-    name: "Super Strikers",
-    city: "Delhi",
-  },
-  {
-    _id: "3",
-    name: "Desert Warriors",
-    city: "Dubai",
-  },
-  {
-    _id: "4",
-    name: "City Knights",
-    city: "London",
-  },
-];
+/*
+|--------------------------------------------------------------------------
+| Team Selection Screen
+|--------------------------------------------------------------------------
+|
+| Picks the two teams for a locally-scored match (both entered by the
+| same scorer), then actually creates the Match record - this used to
+| just pass local state forward with a hardcoded team list and never
+| touch the backend at all.
+*/
 
 export default function TeamSelectionScreen() {
   const navigation = useNavigation();
@@ -44,163 +38,150 @@ export default function TeamSelectionScreen() {
 
   const matchData = route.params?.matchData || {};
 
-  const [teamSelection, setTeamSelection] = useState({
-    activeSlot: "teamA",
+  const { allTeams, loading, getAllTeams } = useTeam();
 
-    teamA: null,
+  useEffect(() => {
+    getAllTeams();
+  }, [getAllTeams]);
 
-    teamB: null,
-
-    searchText: "",
-  });
+  const [activeSlot, setActiveSlot] = useState("teamA");
+  const [teamA, setTeamA] = useState(null);
+  const [teamB, setTeamB] = useState(null);
+  const [searchText, setSearchText] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const filteredTeams = useMemo(() => {
-    return MOCK_TEAMS.filter(
+    return (allTeams || []).filter(
       (team) =>
-        team.name
-          .toLowerCase()
-          .includes(teamSelection.searchText.toLowerCase()) ||
-        team.city
-          .toLowerCase()
-          .includes(teamSelection.searchText.toLowerCase()),
+        team.teamName?.toLowerCase().includes(searchText.toLowerCase()) &&
+        team._id !== teamA?._id &&
+        team._id !== teamB?._id,
     );
-  }, [teamSelection.searchText]);
-
-  const updateField = (field, value) => {
-    setTeamSelection((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
+  }, [allTeams, searchText, teamA, teamB]);
 
   const handleSelectTeam = (team) => {
-    const oppositeTeam =
-      teamSelection.activeSlot === "teamA"
-        ? teamSelection.teamB
-        : teamSelection.teamA;
-
-    if (oppositeTeam && oppositeTeam._id === team._id) {
-      Alert.alert(
-        "Invalid Selection",
-        "You cannot select the same team twice.",
-      );
-
-      return;
-    }
-
-    setTeamSelection((prev) => ({
-      ...prev,
-      [prev.activeSlot]: team,
-    }));
-
-    if (teamSelection.activeSlot === "teamA" && !teamSelection.teamB) {
-      updateField("activeSlot", "teamB");
+    if (activeSlot === "teamA") {
+      setTeamA(team);
+      if (!teamB) setActiveSlot("teamB");
+    } else {
+      setTeamB(team);
     }
   };
 
-  const handleContinue = () => {
-    if (!teamSelection.teamA) {
+  const handleContinue = async () => {
+    if (!teamA) {
       Alert.alert("Validation", "Please select Team A");
       return;
     }
 
-    if (!teamSelection.teamB) {
+    if (!teamB) {
       Alert.alert("Validation", "Please select Team B");
       return;
     }
 
-    navigation.navigate("SquadSelectionScreen", {
-      matchData: {
-        ...matchData,
+    if (teamA._id === teamB._id) {
+      Alert.alert("Validation", "Team A and Team B must be different.");
+      return;
+    }
 
-        teamA: teamSelection.teamA,
+    try {
+      setCreating(true);
 
-        teamB: teamSelection.teamB,
-      },
-    });
+      const match = await createMatchApi({
+        matchTitle: matchData.matchName || `${teamA.teamName} vs ${teamB.teamName}`,
+        matchType: matchData.matchType || "T20",
+        overs: matchData.overs || 20,
+        teamA: teamA._id,
+        teamB: teamB._id,
+        venueName: matchData.ground || "",
+      });
+
+      navigation.navigate("SquadSelectionScreen", {
+        matchId: match._id,
+        teamA,
+        teamB,
+      });
+    } catch (error) {
+      Alert.alert(
+        "Failed",
+        error.response?.data?.message || "Could not create the match.",
+      );
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const renderTeamCard = ({ item }) => (
+  const renderTeamCard = (team, slotLabel) => (
     <TouchableOpacity
-      style={styles.teamCard}
-      onPress={() => handleSelectTeam(item)}
+      style={[
+        styles.slot,
+        activeSlot === slotLabel && styles.slotActive,
+      ]}
+      onPress={() => setActiveSlot(slotLabel)}
     >
-      <Text style={styles.teamName}>{item.name}</Text>
+      <Text style={styles.slotLabel}>{slotLabel === "teamA" ? "TEAM A" : "TEAM B"}</Text>
 
-      <Text style={styles.teamCity}>{item.city}</Text>
+      {team ? (
+        <Text style={styles.slotTeamName}>{team.teamName}</Text>
+      ) : (
+        <Text style={styles.slotPlaceholder}>Tap to select</Text>
+      )}
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      {/* SEARCH */}
+      <Text style={styles.heading}>Select Teams</Text>
 
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search Team..."
-        value={teamSelection.searchText}
-        onChangeText={(text) => updateField("searchText", text)}
-      />
+      <View style={styles.slotsRow}>
+        {renderTeamCard(teamA, "teamA")}
+        {renderTeamCard(teamB, "teamB")}
+      </View>
 
-      {/* TEAM A */}
+      <View style={styles.searchRow}>
+        <Ionicons name="search" size={18} color={COLORS.onSurfaceVariant} />
 
-      <TouchableOpacity
-        style={[
-          styles.selectedCard,
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search teams..."
+          placeholderTextColor={COLORS.onSurfaceVariant}
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+      </View>
 
-          teamSelection.activeSlot === "teamA" && styles.activeCard,
-        ]}
-        onPress={() => updateField("activeSlot", "teamA")}
-      >
-        <Text style={styles.slotLabel}>Team A</Text>
-
-        <Text style={styles.slotValue}>
-          {teamSelection.teamA?.name || "Select Team A"}
-        </Text>
-      </TouchableOpacity>
-
-      {/* TEAM B */}
-
-      <TouchableOpacity
-        style={[
-          styles.selectedCard,
-
-          teamSelection.activeSlot === "teamB" && styles.activeCard,
-        ]}
-        onPress={() => updateField("activeSlot", "teamB")}
-      >
-        <Text style={styles.slotLabel}>Team B</Text>
-
-        <Text style={styles.slotValue}>
-          {teamSelection.teamB?.name || "Select Team B"}
-        </Text>
-      </TouchableOpacity>
-
-      {/* TEAM LIST */}
-
-      <FlatList
-        data={filteredTeams}
-        keyExtractor={(item) => item._id}
-        renderItem={renderTeamCard}
-        contentContainerStyle={{
-          paddingBottom: 120,
-        }}
-      />
-
-      {/* CONTINUE */}
+      {loading ? (
+        <ActivityIndicator size="large" color={COLORS.primary} style={styles.loadingIndicator} />
+      ) : (
+        <FlatList
+          data={filteredTeams}
+          keyExtractor={(item) => item._id}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.teamRow}
+              onPress={() => handleSelectTeam(item)}
+            >
+              <Text style={styles.teamRowName}>{item.teamName}</Text>
+              <Text style={styles.teamRowMeta}>{item.city || ""}</Text>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No teams found.</Text>
+          }
+        />
+      )}
 
       <TouchableOpacity
-        style={[
-          styles.continueButton,
-
-          (!teamSelection.teamA || !teamSelection.teamB) && {
-            opacity: 0.5,
-          },
-        ]}
-        disabled={!teamSelection.teamA || !teamSelection.teamB}
+        style={[styles.continueButton, creating && styles.continueButtonDisabled]}
         onPress={handleContinue}
+        disabled={creating}
       >
-        <Text style={styles.continueText}>Continue</Text>
+        {creating ? (
+          <ActivityIndicator size="small" color={COLORS.onPrimary} />
+        ) : (
+          <Text style={styles.continueText}>Continue to Squad Selection</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -209,103 +190,119 @@ export default function TeamSelectionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-
     backgroundColor: COLORS.background,
-
     padding: 16,
   },
 
-  searchInput: {
-    height: 50,
+  loadingIndicator: {
+    marginTop: 30,
+  },
 
-    backgroundColor: "#fff",
+  listContent: {
+    paddingBottom: 20,
+  },
 
-    borderRadius: 12,
-
-    paddingHorizontal: 16,
-
+  heading: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: COLORS.primary,
     marginBottom: 16,
   },
 
-  selectedCard: {
-    backgroundColor: "#fff",
-
-    padding: 16,
-
-    borderRadius: 12,
-
-    marginBottom: 12,
-
-    borderWidth: 2,
-
-    borderColor: "transparent",
+  slotsRow: {
+    flexDirection: "row",
+    marginBottom: 16,
   },
 
-  activeCard: {
+  slot: {
+    flex: 1,
+    marginHorizontal: 4,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    backgroundColor: COLORS.surfaceContainerLowest,
+  },
+
+  slotActive: {
     borderColor: COLORS.primary,
+    borderWidth: 2,
   },
 
   slotLabel: {
-    fontSize: 12,
-
+    fontSize: 11,
     fontWeight: "700",
+    color: COLORS.onSurfaceVariant,
   },
 
-  slotValue: {
+  slotTeamName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.onSurface,
     marginTop: 4,
-
-    fontSize: 16,
-
-    fontWeight: "600",
   },
 
-  teamCard: {
-    backgroundColor: "#fff",
+  slotPlaceholder: {
+    fontSize: 13,
+    color: COLORS.outline,
+    marginTop: 4,
+  },
 
-    padding: 16,
-
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surfaceContainer,
     borderRadius: 12,
-
+    paddingHorizontal: 12,
     marginBottom: 12,
   },
 
-  teamName: {
-    fontSize: 16,
-
-    fontWeight: "700",
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    marginLeft: 8,
+    color: COLORS.onSurface,
   },
 
-  teamCity: {
-    marginTop: 4,
+  teamRow: {
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.outlineVariant,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
 
-    color: "#666",
+  teamRowName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.onSurface,
+  },
+
+  teamRowMeta: {
+    fontSize: 13,
+    color: COLORS.onSurfaceVariant,
+  },
+
+  emptyText: {
+    textAlign: "center",
+    color: COLORS.onSurfaceVariant,
+    marginTop: 30,
   },
 
   continueButton: {
-    position: "absolute",
-
-    left: 16,
-
-    right: 16,
-
-    bottom: 16,
-
-    height: 56,
-
     backgroundColor: COLORS.primary,
-
     borderRadius: 12,
-
-    justifyContent: "center",
-
+    paddingVertical: 15,
     alignItems: "center",
   },
 
+  continueButtonDisabled: {
+    opacity: 0.6,
+  },
+
   continueText: {
-    color: "#fff",
-
+    color: COLORS.onPrimary,
     fontWeight: "700",
-
-    fontSize: 16,
   },
 });

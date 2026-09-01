@@ -1,20 +1,19 @@
 import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import NavigationHeader from "../../../components/common/NavigationHeader";
+import ShopScreen from "../../../features/shop/screens/ShopScreen";
 
-import {
-  createNativeStackNavigator,
-} from "@react-navigation/native-stack";
+const Stack = createNativeStackNavigator();
 
-import ShopScreen
-from "../../../features/shop/screens/ShopScreen";
-
-const Stack =
-  createNativeStackNavigator();
+const renderHeader = ({ route }) => {
+  return <NavigationHeader route={route} />;
+};
 
 export default function ShopStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerShown: false,
+        header: renderHeader,
       }}
     >
       <Stack.Screen

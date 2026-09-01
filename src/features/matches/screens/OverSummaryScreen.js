@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 import {
   View,
@@ -6,478 +6,501 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+
+import useScoring from "../../scoring/hooks/useScoring";
 
 import { COLORS } from "../../../constants/colors";
 
+const ballLabel = (ball) => {
+  if (ball.isWicket) return "W";
+  if (ball.extraType === "wide") return "wd";
+  if (ball.extraType === "noBall") return "nb";
+  if (ball.extraType === "bye") return `${ball.runs}b`;
+  if (ball.extraType === "legBye") return `${ball.runs}lb`;
+  return String(ball.runs ?? 0);
+};
+
 export default function OverSummaryScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
 
-  const overData = {
-    score: "142/3",
+  const {
+    score = 0,
+    wickets = 0,
+    overs = "0.0",
+    currentRunRate = "0.00",
+    target,
+    requiredRunRate,
+    overBalls = [],
+    striker,
+    nonStriker,
+    bowler,
+    inningsId,
+    bowlingPool = [],
+    lastBowlerId,
+    maxOversPerBowler = 4,
+    oversBowledBy = {},
+  } = route.params || {};
 
-    overs: "14.0",
+  const { setNextBowler, loading, loadInnings } = useScoring();
 
-    runRate: "10.14",
+  const [pendingBowlerId, setPendingBowlerId] = useState(null);
 
-    requiredRate: "8.50",
+  const runsThisOver = overBalls.reduce(
+    (sum, b) => sum + (b.teamRuns ?? b.runs ?? 0),
+    0,
+  );
 
-    runsThisOver: 14,
+  const wicketsThisOver = overBalls.filter((b) => b.isWicket).length;
 
-    balls: [
-      "1",
-      "4",
-      "0",
-      "6",
-      "2",
-      "1",
-    ],
+  /*
+  | Who can bowl next: anyone but the bowler who just finished, and anyone
+  | under the per-bowler over limit.
+  |
+  | The `|| 1` floor matters. In a short match maxOversPerBowler could
+  | arrive as 0 (Math.floor(4 / 5)), which excluded EVERY bowler - the list
+  | came back empty, no bowler could be chosen, and with this screen now
+  | un-dismissible that would be a dead end rather than an annoyance.
+  */
 
-    wickets: 0,
+  const overLimit = Math.max(1, maxOversPerBowler || 1);
 
-    striker: {
-      name: "S. Gill",
-      runs: 42,
-      balls: 28,
-    },
+  const eligibleBowlers = bowlingPool.filter((p) => {
+    const id = p._id;
 
-    nonStriker: {
-      name: "R. Pant",
-      runs: 22,
-      balls: 13,
-    },
+    if (String(id) === String(lastBowlerId)) return false;
 
-    partnership: 68,
+    const oversBowled = (oversBowledBy[id] || 0) / 6;
 
-    partnershipBalls: 41,
+    return oversBowled < overLimit;
+  });
 
-    bowler: {
-      name: "Mitchell Starc",
+  /*
+  | If the limit somehow rules everyone out, offer the whole pool minus the
+  | previous bowler rather than an empty list. A scorer who cannot pick a
+  | bowler cannot continue the match, and that is worse than a bowler
+  | exceeding a quota the app invented.
+  */
 
-      overs: "3.0",
+  const selectableBowlers =
+    eligibleBowlers.length > 0
+      ? eligibleBowlers
+      : bowlingPool.filter((p) => String(p._id) !== String(lastBowlerId));
 
-      maidens: 0,
+  const handleConfirmBowler = async () => {
+    console.log("[OverSummary] handleConfirmBowler", { inningsId, pendingBowlerId });
+    if (!inningsId) {
+      Alert.alert("Missing innings", "Innings ID not provided. Please retry.");
+      return;
+    }
+    if (!pendingBowlerId) {
+      Alert.alert("Select bowler", "Please select the next bowler.");
+      return;
+    }
 
-      runs: 28,
+    try {
+      const result = await setNextBowler(inningsId, pendingBowlerId);
+      console.log("[OverSummary] setNextBowler result", result);
 
-      wickets: 1,
-    },
-  };
+      // handle possible wrapper shapes
+      if (!result) {
+        throw new Error("No response from setNextBowler");
+      }
+      if (result.success === false || result.error) {
+        throw new Error(result.error || "Failed to set next bowler");
+      }
 
-  const handleNextOver = () => {
-    navigation.goBack();
+      /*
+      | Refresh, then go back.
+      |
+      | `loadInnings` was destructured from useScoring but the hook never
+      | returned it, so this was always undefined and the typeof guard made
+      | the refresh a silent no-op. It only appeared to work because going
+      | back re-focuses LiveScoringScreen, whose focus effect fetches. The
+      | hook exports it now and it is awaited, so the new bowler is on
+      | screen the moment the scorer lands back on the pad.
+      */
+
+      if (typeof loadInnings === "function") {
+        await loadInnings(inningsId);
+      }
+
+      navigation.goBack();
+    } catch (err) {
+      console.error("[OverSummary] setNextBowler error", err);
+      Alert.alert("Failed", err?.message || "Could not set the next bowler.");
+    }
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={{
-          padding: 16,
-          paddingBottom: 120,
-        }}
-      >
-        {/* HEADER */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.heading}>Over Completed</Text>
 
-        <Text style={styles.heading}>
-          Over Completed
-        </Text>
-
-        <Text style={styles.subHeading}>
-          Over 14.0 Finished
-        </Text>
-
-        {/* SCORE */}
+        <Text style={styles.subHeading}>End of Over {overs}</Text>
 
         <View style={styles.scoreCard}>
           <Text style={styles.score}>
-            {overData.score}
-          </Text>
-
-          <Text style={styles.overs}>
-            ({overData.overs})
+            {score}/{wickets}{" "}
+            <Text style={styles.overs}>({overs})</Text>
           </Text>
 
           <View style={styles.row}>
-            <View>
-              <Text style={styles.label}>
-                Run Rate
-              </Text>
-
-              <Text
-                style={
-                  styles.value
-                }
-              >
-                {
-                  overData.runRate
-                }
-              </Text>
+            <View style={styles.rateBox}>
+              <Text style={styles.label}>Run Rate</Text>
+              <Text style={styles.value}>{currentRunRate}</Text>
             </View>
 
-            <View>
-              <Text style={styles.label}>
-                Req Rate
-              </Text>
+            {target != null && requiredRunRate != null && (
+              <View style={styles.rateBox}>
+                <Text style={styles.label}>Req Rate</Text>
+                <Text style={[styles.value, styles.reqRateValue]}>
+                  {requiredRunRate}
+                </Text>
+              </View>
+            )}
 
-              <Text
-                style={
-                  styles.value
-                }
-              >
-                {
-                  overData.requiredRate
-                }
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* OVER SUMMARY */}
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            Runs In Over
-          </Text>
-
-          <Text
-            style={
-              styles.bigNumber
-            }
-          >
-            {
-              overData.runsThisOver
-            }
-          </Text>
-
-          <View
-            style={
-              styles.ballRow
-            }
-          >
-            {overData.balls.map(
-              (
-                ball,
-                index
-              ) => (
-                <View
-                  key={index}
-                  style={
-                    styles.ball
-                  }
-                >
-                  <Text
-                    style={
-                      styles.ballText
-                    }
-                  >
-                    {ball}
-                  </Text>
-                </View>
-              )
+            {target != null && (
+              <View style={styles.rateBox}>
+                <Text style={styles.label}>Need</Text>
+                <Text style={styles.value}>{Math.max(0, target - score)}</Text>
+              </View>
             )}
           </View>
         </View>
 
-        {/* PARTNERSHIP */}
-
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            Partnership
-          </Text>
+          <Text style={styles.cardTitle}>Runs In Over</Text>
 
-          <Text
-            style={
-              styles.partnership
-            }
-          >
-            {
-              overData.partnership
-            }{" "}
-            Runs
-          </Text>
+          <Text style={styles.bigNumber}>{runsThisOver}</Text>
 
-          <Text>
-            {
-              overData
-                .partnershipBalls
-            }{" "}
-            Balls
-          </Text>
-
-          <View
-            style={
-              styles.row
-            }
-          >
-            <View>
-              <Text>
-                {
-                  overData
-                    .striker
-                    .name
-                }
-              </Text>
-
-              <Text>
-                {
-                  overData
-                    .striker
-                    .runs
-                }
-                (
-                {
-                  overData
-                    .striker
-                    .balls
-                }
-                )
-              </Text>
-            </View>
-
-            <View>
-              <Text>
-                {
-                  overData
-                    .nonStriker
-                    .name
-                }
-              </Text>
-
-              <Text>
-                {
-                  overData
-                    .nonStriker
-                    .runs
-                }
-                (
-                {
-                  overData
-                    .nonStriker
-                    .balls
-                }
-                )
-              </Text>
-            </View>
+          <View style={styles.ballRow}>
+            {overBalls.map((ball, index) => (
+              <View
+                key={ball._id || index}
+                style={[
+                  styles.ball,
+                  ball.isWicket && styles.ballWicket,
+                  ball.extraType === "wide" && styles.ballExtra,
+                  ball.extraType === "noBall" && styles.ballExtra,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.ballText,
+                    ball.isWicket && styles.ballTextWicket,
+                  ]}
+                >
+                  {ballLabel(ball)}
+                </Text>
+              </View>
+            ))}
           </View>
+
+          {wicketsThisOver > 0 && (
+            <Text style={styles.wicketNote}>
+              {wicketsThisOver} wicket{wicketsThisOver > 1 ? "s" : ""} this over
+            </Text>
+          )}
         </View>
 
-        {/* BOWLER */}
+        {(striker || nonStriker) && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>At The Crease</Text>
+
+            {striker && (
+              <View style={styles.playerRow}>
+                <Text style={styles.playerName}>{striker.playerName} *</Text>
+                <Text style={styles.playerFigures}>
+                  {striker.runs} ({striker.balls})
+                </Text>
+              </View>
+            )}
+
+            {nonStriker && (
+              <View style={styles.playerRow}>
+                <Text style={styles.playerName}>{nonStriker.playerName}</Text>
+                <Text style={styles.playerFigures}>
+                  {nonStriker.runs} ({nonStriker.balls})
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {bowler && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Bowler This Over</Text>
+
+            <View style={styles.playerRow}>
+              <Text style={styles.playerName}>{bowler.playerName}</Text>
+              <Text style={styles.playerFigures}>
+                {bowler.overs}-{bowler.maidens ?? 0}-{bowler.runs}-{bowler.wickets}
+              </Text>
+            </View>
+          </View>
+        )}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            Bowler Figures
-          </Text>
+          <Text style={styles.cardTitle}>Select New Bowler</Text>
 
-          <Text
-            style={
-              styles.bowlerName
-            }
-          >
-            {
-              overData.bowler
-                .name
-            }
-          </Text>
-
-          <View
-            style={
-              styles.row
-            }
-          >
-            <Text>
-              O:
-              {" "}
-              {
-                overData
-                  .bowler
-                  .overs
-              }
+          {selectableBowlers.length === 0 ? (
+            <Text style={styles.emptyBowlerText}>
+              No eligible bowlers available (all at quota or only one bowler).
             </Text>
+          ) : (
+            selectableBowlers.map((player) => {
+              const id = player._id;
+              const oversBowled = (oversBowledBy[id] || 0) / 6;
+              const selected = pendingBowlerId === id;
 
-            <Text>
-              M:
-              {" "}
-              {
-                overData
-                  .bowler
-                  .maidens
-              }
-            </Text>
-
-            <Text>
-              R:
-              {" "}
-              {
-                overData
-                  .bowler
-                  .runs
-              }
-            </Text>
-
-            <Text>
-              W:
-              {" "}
-              {
-                overData
-                  .bowler
-                  .wickets
-              }
-            </Text>
-          </View>
+              return (
+                <TouchableOpacity
+                  key={id}
+                  style={[
+                    styles.bowlerRow,
+                    selected && styles.bowlerRowSelected,
+                  ]}
+                  onPress={() => setPendingBowlerId(id)}
+                >
+                  <Text style={styles.playerName}>{player.playerName}</Text>
+                  <Text style={styles.playerFigures}>
+                    {oversBowled.toFixed(1)} ov
+                  </Text>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
       </ScrollView>
 
       <TouchableOpacity
-        style={styles.button}
-        onPress={
-          handleNextOver
-        }
+        style={[
+          styles.button,
+          (!pendingBowlerId || loading) && styles.buttonDisabled,
+        ]}
+        disabled={!pendingBowlerId || loading}
+        onPress={handleConfirmBowler}
       >
-        <Text
-          style={
-            styles.buttonText
-          }
-        >
-          Start Next Over
-        </Text>
+        {loading ? (
+          <ActivityIndicator size="small" color={COLORS.onPrimary} />
+        ) : (
+          <Text style={styles.buttonText}>Start Next Over →</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor:
-        COLORS.background,
-    },
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
 
-    heading: {
-      fontSize: 28,
-      fontWeight: "700",
-      textAlign: "center",
-    },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 120,
+  },
 
-    subHeading: {
-      textAlign: "center",
-      color: "#666",
-      marginBottom: 20,
-    },
+  heading: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: COLORS.primary,
+    textAlign: "center",
+  },
 
-    scoreCard: {
-      backgroundColor:
-        "#fff",
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 16,
-    },
+  subHeading: {
+    textAlign: "center",
+    color: COLORS.onSurfaceVariant,
+    marginBottom: 16,
+    marginTop: 4,
+  },
 
-    score: {
-      fontSize: 40,
-      fontWeight: "700",
-      color: COLORS.primary,
-    },
+  scoreCard: {
+    backgroundColor: COLORS.surfaceContainerLowest,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+  },
 
-    overs: {
-      color: "#666",
-      marginBottom: 16,
-    },
+  score: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: COLORS.onSurface,
+  },
 
-    card: {
-      backgroundColor:
-        "#fff",
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 16,
-    },
+  overs: {
+    fontSize: 16,
+    color: COLORS.onSurfaceVariant,
+    fontWeight: "400",
+  },
 
-    cardTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      marginBottom: 12,
-    },
+  row: {
+    flexDirection: "row",
+    marginTop: 14,
+    justifyContent: "center",
+  },
 
-    row: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      marginTop: 10,
-    },
+  rateBox: {
+    alignItems: "center",
+    marginHorizontal: 12,
+  },
 
-    label: {
-      color: "#666",
-    },
+  label: {
+    fontSize: 11,
+    color: COLORS.onSurfaceVariant,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
 
-    value: {
-      fontSize: 20,
-      fontWeight: "700",
-    },
+  value: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.onSurface,
+    marginTop: 2,
+  },
 
-    bigNumber: {
-      fontSize: 50,
-      textAlign: "center",
-      fontWeight: "700",
-      color:
-        COLORS.secondary,
-    },
+  reqRateValue: {
+    color: COLORS.error,
+  },
 
-    ballRow: {
-      flexDirection: "row",
-      justifyContent:
-        "center",
-      marginTop: 12,
-    },
+  card: {
+    backgroundColor: COLORS.surfaceContainerLowest,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+  },
 
-    ball: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      backgroundColor:
-        COLORS.primary,
-      justifyContent:
-        "center",
-      alignItems: "center",
-      marginHorizontal: 4,
-    },
+  cardTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.onSurfaceVariant,
+    marginBottom: 10,
+    letterSpacing: 0.3,
+  },
 
-    ballText: {
-      color: "#fff",
-      fontWeight: "700",
-    },
+  bigNumber: {
+    fontSize: 36,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    textAlign: "center",
+  },
 
-    partnership: {
-      fontSize: 28,
-      fontWeight: "700",
-      color:
-        COLORS.secondary,
-    },
+  ballRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    marginTop: 12,
+    gap: 6,
+  },
 
-    bowlerName: {
-      fontSize: 20,
-      fontWeight: "700",
-      marginBottom: 12,
-    },
+  ball: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-    button: {
-      position: "absolute",
-      bottom: 16,
-      left: 16,
-      right: 16,
-      height: 56,
-      backgroundColor:
-        COLORS.primary,
-      borderRadius: 12,
-      justifyContent:
-        "center",
-      alignItems: "center",
-    },
+  ballWicket: {
+    backgroundColor: COLORS.error,
+  },
 
-    buttonText: {
-      color: "#fff",
-      fontSize: 16,
-      fontWeight: "700",
-    },
-  });
+  ballExtra: {
+    backgroundColor: COLORS.secondary,
+  },
+
+  ballText: {
+    color: COLORS.onPrimary,
+    fontWeight: "700",
+    fontSize: 11,
+  },
+
+  ballTextWicket: {
+    color: COLORS.onError,
+  },
+
+  wicketNote: {
+    textAlign: "center",
+    color: COLORS.error,
+    fontWeight: "600",
+    marginTop: 10,
+    fontSize: 13,
+  },
+
+  playerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.outlineVariant,
+  },
+
+  playerName: {
+    fontWeight: "600",
+    color: COLORS.onSurface,
+    fontSize: 15,
+  },
+
+  playerFigures: {
+    color: COLORS.onSurfaceVariant,
+    fontSize: 14,
+  },
+
+  bowlerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    marginBottom: 8,
+  },
+
+  bowlerRowSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.surfaceContainer,
+  },
+
+  emptyBowlerText: {
+    color: COLORS.onSurfaceVariant,
+    fontSize: 13,
+    textAlign: "center",
+    paddingVertical: 8,
+  },
+
+  button: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 16,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+
+  buttonText: {
+    color: COLORS.onPrimary,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+});

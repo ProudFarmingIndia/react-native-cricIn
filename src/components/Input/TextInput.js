@@ -1,14 +1,13 @@
 import React from "react";
-import { TextInput, View, StyleSheet } from "react-native";
-import { COLORS } from "../../constants/colors";
+import { View, TextInput, StyleSheet } from "react-native";
 
-export default function CustomInput(props) {
+export default function CustomInput({ style, containerStyle, ...props }) {
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, containerStyle]}>
       <TextInput
         {...props}
-        style={styles.input}
         placeholderTextColor="#777"
+        style={[styles.input, style]}
       />
     </View>
   );
@@ -17,13 +16,25 @@ export default function CustomInput(props) {
 const styles = StyleSheet.create({
   container: {
     width: "100%",
+
     marginVertical: 8,
   },
+
   input: {
+    height: 50,
+
     borderWidth: 1,
-    borderColor: COLORS.muted,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: "#fff",
+
+    borderColor: "#D9D9D9",
+
+    borderRadius: 12,
+
+    paddingHorizontal: 16,
+
+    backgroundColor: "#FFFFFF",
+
+    fontSize: 15,
+
+    color: "#000000",
   },
 });

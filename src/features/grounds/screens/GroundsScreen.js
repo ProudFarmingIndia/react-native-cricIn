@@ -41,30 +41,9 @@ const grounds = [
 export default function GroundsScreen() {
   return (
     <SafeAreaView style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <View style={styles.logoRow}>
-          <Ionicons
-            name="baseball"
-            size={24}
-            color={COLORS.primary}
-          />
-
-          <Text style={styles.logoText}>PitchMaster Pro</Text>
-        </View>
-
-        <TouchableOpacity>
-          <Ionicons
-            name="notifications-outline"
-            size={24}
-            color={COLORS.textSecondary}
-          />
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={styles.scrollContent}
       >
         {/* TITLE */}
         <Text style={styles.title}>Explore Grounds</Text>
@@ -88,7 +67,7 @@ export default function GroundsScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: 20 }}
+          style={styles.filtersRow}
         >
           <TouchableOpacity style={styles.activeFilter}>
             <Ionicons
@@ -183,6 +162,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+
+  scrollContent: {
+    paddingBottom: 120,
+  },
+
+  filtersRow: {
+    marginBottom: 20,
   },
 
   header: {

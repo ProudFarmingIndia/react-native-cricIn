@@ -10,7 +10,6 @@ import {
   Platform,
 } from "react-native";
 import { COLORS } from "../../../constants/colors";
-import { TYPOGRAPHY } from "../../../constants/typography";
 import { SPACING } from "../../../constants/spacing";
 
 import PrimaryButton from "../../../components/Button/PrimaryButton";
@@ -27,7 +26,7 @@ export default function LoginScreen({ navigation }) {
 
   const handleSendOtp = async () => {
     if (phone.length !== 10) {
-      alert("Enter valid mobile number");
+      console.warn("Enter valid mobile number");
       return;
     }
 
@@ -40,7 +39,7 @@ export default function LoginScreen({ navigation }) {
       });
     } else {
       console.error("OTP Error:", result.payload);
-      alert(result.payload?.message || "Failed to send OTP111");
+      console.warn(result.payload?.message || "Failed to send OTP");
     }
   };
 
@@ -76,7 +75,7 @@ export default function LoginScreen({ navigation }) {
               <Text style={styles.codeText}>+91</Text>
             </View>
 
-            <View style={{ flex: 1 }}>
+            <View style={styles.phoneInputWrap}>
               <TextInput
                 value={phone}
                 onChangeText={handlePhoneChange}
@@ -118,6 +117,10 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+
+  phoneInputWrap: {
     flex: 1,
   },
 

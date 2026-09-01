@@ -10,7 +10,23 @@ import {
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { COLORS } from "../../../../constants/colors";
 
-export default function GalleryTab({ profile = {}, onAddPhoto }) {
+/*
+|--------------------------------------------------------------------------
+| GalleryTab
+|--------------------------------------------------------------------------
+|
+| readOnly - set when viewing SOMEONE ELSE'S gallery. Hides the upload
+| button and the FAB, and rewords the empty state, which otherwise tells
+| you to upload media to a profile that isn't yours. Defaults to false,
+| so your own profile behaves exactly as before.
+|
+*/
+
+export default function GalleryTab({
+  profile = {},
+  onAddPhoto,
+  readOnly = false,
+}) {
   const gallery = profile?.gallery || [];
 
   const images = gallery.filter((item) => item.type === "IMAGE");
@@ -46,21 +62,25 @@ export default function GalleryTab({ profile = {}, onAddPhoto }) {
       <View style={styles.emptyContainer}>
         <MaterialIcons name="photo-library" size={60} color={COLORS.outline} />
 
-        <Text style={styles.emptyTitle}>No Media Uploaded</Text>
+        <Text style={styles.emptyTitle}>No Media Yet</Text>
 
         <Text style={styles.emptyText}>
-          Upload your cricket moments, match highlights and memories.
+          {readOnly
+            ? "This player hasn't shared any photos or videos."
+            : "Upload your cricket moments, match highlights and memories."}
         </Text>
 
-        <TouchableOpacity style={styles.button} onPress={onAddPhoto}>
-          <MaterialIcons
-            name="add-a-photo"
-            size={20}
-            color={COLORS.onPrimary}
-          />
+        {!readOnly && (
+          <TouchableOpacity style={styles.button} onPress={onAddPhoto}>
+            <MaterialIcons
+              name="add-a-photo"
+              size={20}
+              color={COLORS.onPrimary}
+            />
 
-          <Text style={styles.buttonText}>Upload Media</Text>
-        </TouchableOpacity>
+            <Text style={styles.buttonText}>Upload Media</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -95,9 +115,11 @@ export default function GalleryTab({ profile = {}, onAddPhoto }) {
         </>
       )}
 
-      <TouchableOpacity style={styles.fab} onPress={onAddPhoto}>
-        <MaterialIcons name="add" size={28} color={COLORS.onPrimary} />
-      </TouchableOpacity>
+      {!readOnly && (
+        <TouchableOpacity style={styles.fab} onPress={onAddPhoto}>
+          <MaterialIcons name="add" size={28} color={COLORS.onPrimary} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

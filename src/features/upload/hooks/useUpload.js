@@ -4,6 +4,16 @@ import * as ImagePicker from "expo-image-picker";
 
 import { uploadImageApi, uploadVideoApi } from "../services/upload.service";
 
+/*
+| Surfaces the SERVER's reason instead of a generic string. The old catch
+| always said "Unable to upload image", which hid the actual multipart
+| failure and made the web upload bug much harder to diagnose than it
+| needed to be.
+*/
+
+const describeError = (error, fallback) =>
+  error?.response?.data?.message || error?.message || fallback;
+
 export default function useUpload() {
   const [uploading, setUploading] = useState(false);
 
@@ -53,14 +63,17 @@ export default function useUpload() {
 
       Alert.alert(
         "Upload Failed",
-        response?.data?.message || "Image upload failed.",
+        response?.message || "Image upload failed.",
       );
 
       return null;
     } catch (error) {
       console.log("Image Upload Error", error);
 
-      Alert.alert("Upload Failed", "Unable to upload image.");
+      Alert.alert(
+        "Upload Failed",
+        describeError(error, "Unable to upload image."),
+      );
 
       return null;
     } finally {
@@ -106,20 +119,31 @@ export default function useUpload() {
 
       const response = await uploadVideoApi(asset, folder);
 
-      if (response?.data?.success) {
-        return response.data.data;
+      /*
+      | uploadVideoApi already returns response.data, i.e. the
+      | { success, message, data } envelope. This checked
+      | response.data.success - one level too deep - so a successful
+      | upload always fell through to the failure branch and returned null.
+      | pickImage had it right; this did not.
+      */
+
+      if (response?.success) {
+        return response.data;
       }
 
       Alert.alert(
         "Upload Failed",
-        response?.data?.message || "Video upload failed.",
+        response?.message || "Video upload failed.",
       );
 
       return null;
     } catch (error) {
       console.log("Video Upload Error", error);
 
-      Alert.alert("Upload Failed", "Unable to upload video.");
+      Alert.alert(
+        "Upload Failed",
+        describeError(error, "Unable to upload video."),
+      );
 
       return null;
     } finally {

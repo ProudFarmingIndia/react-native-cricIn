@@ -10,80 +10,70 @@ import {
 } from "react-native";
 
 import { SectionCard } from "../../../components/common/FormComponents";
-
 import useUpload from "../../upload/hooks/useUpload";
-
 import { COLORS } from "../../../constants/colors";
 
-export default function GallerySection({ profile = {}, updateField, isEditMode }) {
+export default function GallerySection({
+  profile,
+  updateField,
+  isEditMode,
+}) {
   const { uploading, pickImage, pickVideo } = useUpload();
 
-  const gallery = profile.gallery || [];
+  // Normalize profile — default params only apply for `undefined`, not `null`.
+  // If a parent passes `profile={null}` (e.g. while loading), we still render safely.
+  const safeProfile = profile ?? {};
+  const safeUpdateField =
+    typeof updateField === "function" ? updateField : () => {};
+
+  // Safe array
+  const gallery = Array.isArray(safeProfile.gallery) ? safeProfile.gallery : [];
 
   const images = gallery.filter((item) => item.type === "IMAGE");
-
   const videos = gallery.filter((item) => item.type === "VIDEO");
-
-  /////////////////////////////////////////////////////
 
   const addImage = async () => {
     const uploaded = await pickImage("players/gallery");
-
     if (!uploaded) return;
 
-    updateField("gallery", [
+    safeUpdateField("gallery", [
       ...gallery,
       {
         type: "IMAGE",
-
         url: uploaded.url,
-
         publicId: uploaded.publicId,
-
         uploadedAt: new Date(),
       },
     ]);
   };
-
-  /////////////////////////////////////////////////////
 
   const addVideo = async () => {
     const uploaded = await pickVideo("players/gallery");
-
     if (!uploaded) return;
 
-    updateField("gallery", [
+    safeUpdateField("gallery", [
       ...gallery,
       {
         type: "VIDEO",
-
         url: uploaded.url,
-
         publicId: uploaded.publicId,
-
         uploadedAt: new Date(),
       },
     ]);
   };
 
-  /////////////////////////////////////////////////////
-
   const deleteMedia = (publicId) => {
-    updateField(
+    safeUpdateField(
       "gallery",
-      gallery.filter((item) => item.publicId !== publicId),
+      gallery.filter((item) => item.publicId !== publicId)
     );
   };
-
-  /////////////////////////////////////////////////////
 
   return (
     <SectionCard icon="🖼" title="Gallery">
       {/* Images */}
-
       <View style={styles.header}>
         <Text style={styles.heading}>Images</Text>
-
         {isEditMode && (
           <TouchableOpacity style={styles.addBtn} onPress={addImage}>
             <Text style={styles.addText}>+ Add</Text>
@@ -94,12 +84,7 @@ export default function GallerySection({ profile = {}, updateField, isEditMode }
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {images.map((item) => (
           <View key={item.publicId} style={styles.mediaBox}>
-            <Image
-              source={{
-                uri: item.url,
-              }}
-              style={styles.image}
-            />
+            <Image source={{ uri: item.url }} style={styles.image} />
 
             {isEditMode && (
               <TouchableOpacity
@@ -116,15 +101,8 @@ export default function GallerySection({ profile = {}, updateField, isEditMode }
       </ScrollView>
 
       {/* Videos */}
-
-      <View
-        style={[
-          styles.header,
-          styles.mrgTwtyFv,
-        ]}
-      >
+      <View style={[styles.header, styles.mrgTwtyFv]}>
         <Text style={styles.heading}>Videos</Text>
-
         {isEditMode && (
           <TouchableOpacity style={styles.addBtn} onPress={addVideo}>
             <Text style={styles.addText}>+ Add</Text>
@@ -136,7 +114,6 @@ export default function GallerySection({ profile = {}, updateField, isEditMode }
         {videos.map((item) => (
           <View key={item.publicId} style={styles.video}>
             <Text style={styles.videoIcon}>🎥</Text>
-
             <Text numberOfLines={1} style={styles.videoText}>
               Video
             </Text>
@@ -169,115 +146,74 @@ export default function GallerySection({ profile = {}, updateField, isEditMode }
 const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
-
     justifyContent: "space-between",
-
     alignItems: "center",
-
     marginBottom: 12,
   },
-
   heading: {
     fontSize: 16,
-
     fontWeight: "700",
-
     color: COLORS.onSurface,
   },
-
   addBtn: {
     paddingHorizontal: 14,
-
     paddingVertical: 7,
-
     borderRadius: 8,
-
     backgroundColor: COLORS.primary,
   },
-
   addText: {
     color: "#fff",
-
     fontWeight: "700",
   },
-
   mediaBox: {
     marginRight: 12,
-
     position: "relative",
   },
-
   image: {
     width: 110,
-
     height: 110,
-
     borderRadius: 12,
-
     backgroundColor: COLORS.surfaceVariant,
   },
-
   video: {
     width: 110,
-
     height: 110,
-
     borderRadius: 12,
-
     backgroundColor: COLORS.surfaceVariant,
-
     justifyContent: "center",
-
     alignItems: "center",
-
     marginRight: 12,
   },
-
   videoIcon: {
     fontSize: 32,
   },
-
   videoText: {
     marginTop: 10,
-
     fontWeight: "600",
   },
-
   delete: {
     position: "absolute",
-
     top: 6,
-
     right: 6,
-
     width: 26,
-
     height: 26,
-
     borderRadius: 13,
-
     backgroundColor: "#ff4d4f",
-
     justifyContent: "center",
-
     alignItems: "center",
   },
-
   deleteText: {
     color: "#fff",
-
     fontWeight: "700",
   },
-
   empty: {
     color: COLORS.onSurfaceVariant,
-
     marginVertical: 20,
   },
-  mrgTwtyFv : {
-    marginTop : 25
+  mrgTwtyFv: {
+    marginTop: 25,
   },
-  mrgTwty : {
-    marginTop : 20
-  }
+  mrgTwty: {
+    marginTop: 20,
+  },
 });

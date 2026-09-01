@@ -3,60 +3,37 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Platform,
   StyleSheet,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { COLORS } from "../../constants/colors";
 
-export default function DatePickerField({
-  label,
-  value,
-  onChange,
-}) {
+export default function DatePickerField({ label, value, onChange }) {
   const [show, setShow] = useState(false);
 
-  const selectedDate = value
-    ? new Date(value)
-    : new Date();
-
-  const handleChange = (_, date) => {
+  const onDateChange = (event, selectedDate) => {
     setShow(false);
-
-    if (!date) return;
-
-    onChange(date.toISOString().split("T")[0]);
+    if (event.type === "set" && selectedDate) {
+      onChange(selectedDate.toISOString()); // or whatever format you want
+    }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
-
-      <TouchableOpacity
-        style={styles.input}
-        onPress={() => setShow(true)}
-      >
-        <Text
-          style={[
-            styles.text,
-            !value && styles.placeholder,
-          ]}
-        >
-          {value || "Select Date"}
+    <View style={styles.field}>
+      {!!label && <Text style={styles.label}>{label}</Text>}
+      <TouchableOpacity style={styles.dropdown} onPress={() => setShow(true)}>
+        <Text style={styles.dropdownText}>
+          {value ? new Date(value).toLocaleDateString() : "Select Date"}
         </Text>
+        <Text style={styles.arrow}>📅</Text>
       </TouchableOpacity>
 
       {show && (
         <DateTimePicker
-          value={selectedDate}
+          value={value ? new Date(value) : new Date()}
           mode="date"
-          display={
-            Platform.OS === "ios"
-              ? "spinner"
-              : "default"
-          }
-          maximumDate={new Date()}
-          onChange={handleChange}
+          display="default"
+          onChange={onDateChange}
         />
       )}
     </View>

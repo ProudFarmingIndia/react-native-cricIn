@@ -14,67 +14,48 @@ export default function CricketInfoSection({
   isEditMode,
   updateField,
 }) {
+  // Safe destructuring with defaults
+  const {
+    playerType = "",
+    battingStyle = "",
+    bowlingStyle = "",
+    jerseyNumber = "",
+  } = profile || {};
+
   if (isEditMode) {
     return (
-      <SectionCard
-        icon="🏏"
-        title="Cricket Information"
-      >
+      <SectionCard icon="🏏" title="Cricket Information">
         <SelectField
           label="Player Type"
-          value={profile.playerType}
+          value={playerType || ""}
           options={playerTypes}
           placeholder="Select Player Type"
-          onSelect={(value) =>
-            updateField(
-              "playerType",
-              value
-            )
-          }
+          onSelect={(value) => updateField("playerType", value)}
         />
 
         <SelectField
           label="Batting Style"
-          value={profile.battingStyle}
+          value={battingStyle || ""}
           options={battingStyles}
           placeholder="Select Batting Style"
-          onSelect={(value) =>
-            updateField(
-              "battingStyle",
-              value
-            )
-          }
+          onSelect={(value) => updateField("battingStyle", value)}
         />
 
         <SelectField
           label="Bowling Style"
-          value={profile.bowlingStyle}
+          value={bowlingStyle || ""}
           options={bowlingStyles}
           placeholder="Select Bowling Style"
-          onSelect={(value) =>
-            updateField(
-              "bowlingStyle",
-              value
-            )
-          }
+          onSelect={(value) => updateField("bowlingStyle", value)}
         />
 
         <InputField
           label="Jersey Number"
           keyboardType="number-pad"
-          value={
-            profile.jerseyNumber?.toString() ||
-            ""
-          }
+          value={jerseyNumber?.toString() || ""}
           placeholder="07"
           onChangeText={(text) =>
-            updateField(
-              "jerseyNumber",
-              text.replace(
-                /[^0-9]/g,
-                ""
-              )
-            )
+            updateField("jerseyNumber", text.replace(/[^0-9]/g, ""))
           }
         />
       </SectionCard>
@@ -82,29 +63,11 @@ export default function CricketInfoSection({
   }
 
   return (
-    <SectionCard
-      icon="🏏"
-      title="Cricket Information"
-    >
-      <InfoRow
-        label="Player Type"
-        value={profile.playerType}
-      />
-
-      <InfoRow
-        label="Batting Style"
-        value={profile.battingStyle}
-      />
-
-      <InfoRow
-        label="Bowling Style"
-        value={profile.bowlingStyle}
-      />
-
-      <InfoRow
-        label="Jersey Number"
-        value={profile.jerseyNumber}
-      />
+    <SectionCard icon="🏏" title="Cricket Information">
+      <InfoRow label="Player Type" value={playerType || ""} />
+      <InfoRow label="Batting Style" value={battingStyle || ""} />
+      <InfoRow label="Bowling Style" value={bowlingStyle || ""} />
+      <InfoRow label="Jersey Number" value={jerseyNumber || ""} />
     </SectionCard>
   );
 }

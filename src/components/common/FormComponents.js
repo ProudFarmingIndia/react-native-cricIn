@@ -75,6 +75,10 @@ export function SelectField({
 }) {
   const [visible, setVisible] = useState(false);
 
+  // Normalize option to just its value for comparison
+  const currentValue =
+    typeof value === "string" ? value : value?.value || "";
+
   return (
     <>
       <View style={styles.field}>
@@ -87,12 +91,12 @@ export function SelectField({
           <Text
             style={[
               styles.dropdownText,
-              !value && {
+              !currentValue && {
                 color: COLORS.outline,
               },
             ]}
           >
-            {value || placeholder}
+            {currentValue || placeholder}
           </Text>
 
           <Text style={styles.arrow}>▼</Text>
@@ -104,19 +108,25 @@ export function SelectField({
           <View style={styles.sheet}>
             <FlatList
               data={options}
-              keyExtractor={(item) => item.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.option}
-                  onPress={() => {
-                    onSelect(item);
+              keyExtractor={(item) =>
+                String(item.value ?? item.label ?? item)
+              }
+              renderItem={({ item }) => {
+                label = item.label ?? item;
+                const val = item.value ?? item;
 
-                    setVisible(false);
-                  }}
-                >
-                  <Text style={styles.optionText}>{item}</Text>
-                </TouchableOpacity>
-              )}
+                return (
+                  <TouchableOpacity
+                    style={styles.option}
+                    onPress={() => {
+                      onSelect(val);
+                      setVisible(false);
+                    }}
+                  >
+                    <Text style={styles.optionText}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              }}
             />
           </View>
         </Pressable>

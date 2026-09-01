@@ -7,175 +7,245 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+
+import { createInningsApi } from "../../scoring/services/scoring.service";
 
 import { COLORS } from "../../../constants/colors";
 
-const BATTERS = [
-  {
-    id: "1",
-    name: "Alex Johnson",
-  },
-  {
-    id: "2",
-    name: "David Warner",
-  },
-  {
-    id: "3",
-    name: "Steve Smith",
-  },
-  {
-    id: "4",
-    name: "Glenn Maxwell",
-  },
-];
-
-const BOWLERS = [
-  {
-    id: "1",
-    name: "M. Shami",
-  },
-  {
-    id: "2",
-    name: "J. Bumrah",
-  },
-  {
-    id: "3",
-    name: "R. Khan",
-  },
-];
+/*
+|--------------------------------------------------------------------------
+| Second Innings Screen — Opening Pair + Bowler For The Chase
+|--------------------------------------------------------------------------
+|
+| Expects via route.params:
+|   matchId, battingTeamSquad, bowlingTeamSquad
+|   battingTeamId, bowlingTeamId    - team IDs (already swapped by
+|                                      InningsSummaryScreen)
+|   target                          - runs needed to win
+|
+| On confirm, calls createInningsApi (backend is idempotent — duplicate
+| calls return the existing innings safely). Then replaces the stack
+| entry with LiveScoringScreen so the back button cannot loop back here.
+*/
 
 export default function SecondInningsScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
 
-  const [lineupData, setLineupData] = useState({
-    striker: null,
+  const {
+    matchId,
+    battingTeamSquad = [],
+    bowlingTeamSquad = [],
+    battingTeamId,
+    bowlingTeamId,
+    target,
+  } = route.params || {};
 
-    nonStriker: null,
+  const [striker, setStriker] = useState(null);
+  const [nonStriker, setNonStriker] = useState(null);
+  const [openingBowler, setOpeningBowler] = useState(null);
+  const [starting, setStarting] = useState(false);
 
-    openingBowler: null,
-  });
+  /*
+  |--------------------------------------------------------------------------
+  | Batter Selection
+  |--------------------------------------------------------------------------
+  |
+  | Tap once  → assign to striker slot (if empty) or non-striker slot
+  | Tap again on same player → deselect
+  | Both slots full → show alert with proper title
+  */
 
-  const updateField = (field, value) => {
-    setLineupData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+  const handleSelectBatter = (player) => {
+    if (striker?._id === player._id) {
+      setStriker(null);
+      return;
+    }
+
+    if (nonStriker?._id === player._id) {
+      setNonStriker(null);
+      return;
+    }
+
+    if (!striker) {
+      setStriker(player);
+      return;
+    }
+
+    if (!nonStriker) {
+      setNonStriker(player);
+      return;
+    }
+
+    // FIX: Alert.alert requires a title as its first argument
+    Alert.alert("Both Openers Selected", "Tap a selected opener to change them.");
   };
 
-  const handleStartChase = () => {
-    if (!lineupData.striker) {
-      Alert.alert("Select Striker");
+  /*
+  |--------------------------------------------------------------------------
+  | Start Chase
+  |--------------------------------------------------------------------------
+  */
+
+  const handleStartChase = async () => {
+    if (!striker || !nonStriker) {
+      Alert.alert("Openers Required", "Please select both opening batters.");
       return;
     }
 
-    if (!lineupData.nonStriker) {
-      Alert.alert("Select Non-Striker");
+    if (!openingBowler) {
+      Alert.alert("Bowler Required", "Please select the opening bowler.");
       return;
     }
 
-    if (!lineupData.openingBowler) {
-      Alert.alert("Select Opening Bowler");
-      return;
-    }
+    try {
+      setStarting(true);
 
-    navigation.replace("LiveScoringScreen", {
-      innings: 2,
-      target: 185,
-    });
+      const innings = await createInningsApi({
+        matchId,
+        battingTeam: battingTeamId,
+        bowlingTeam: bowlingTeamId,
+        inningsNumber: 2,
+        currentStrikerId: striker._id,
+        currentNonStrikerId: nonStriker._id,
+        currentBowlerId: openingBowler._id,
+      });
+
+      navigation.replace("LiveScoringScreen", {
+        matchId,
+        inningsId: innings._id,
+        battingSquad: battingTeamSquad,
+        bowlingSquad: bowlingTeamSquad,
+        target,
+      });
+    } catch (error) {
+      Alert.alert(
+        "Failed",
+        error.response?.data?.message ||
+          "Could not start the second innings. Please try again.",
+      );
+    } finally {
+      setStarting(false);
+    }
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Render
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={{
-          padding: 16,
-          paddingBottom: 140,
-        }}
-      >
-        {/* TARGET CARD */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.heading}>Second Innings</Text>
 
-        <View style={styles.targetCard}>
-          <Text style={styles.targetLabel}>Target To Win</Text>
-
-          <Text style={styles.targetScore}>185</Text>
-
-          <Text style={styles.targetInfo}>Need 185 Runs In 20 Overs</Text>
-        </View>
-
-        {/* CHASE INFO */}
-
-        <View style={styles.infoCard}>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoValue}>184/6</Text>
-
-            <Text style={styles.infoLabel}>First Innings</Text>
+        {target != null && (
+          <View style={styles.targetCard}>
+            <Text style={styles.targetLabel}>TARGET</Text>
+            <Text style={styles.targetValue}>{target}</Text>
+            <Text style={styles.targetSub}>runs to win</Text>
           </View>
+        )}
 
-          <View style={styles.infoItem}>
-            <Text style={styles.infoValue}>9.20</Text>
-
-            <Text style={styles.infoLabel}>Required RR</Text>
-          </View>
-        </View>
-
-        {/* BATTERS */}
+        {/* ── Opening Batters ─────────────────────────────────────── */}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Select Opening Batters</Text>
+          <Text style={styles.title}>Select Opening Batters</Text>
 
-          <View style={styles.selectedBox}>
-            <Text>Striker: {lineupData.striker?.name || "Not Selected"}</Text>
+          <View style={styles.slotRow}>
+            <View style={[styles.slot, striker && styles.slotFilled]}>
+              <Text style={styles.slotLabel}>STRIKER</Text>
+              <Text style={styles.slotValue}>
+                {striker?.playerName || "Not selected"}
+              </Text>
+            </View>
+
+            <View style={[styles.slot, nonStriker && styles.slotFilled]}>
+              <Text style={styles.slotLabel}>NON-STRIKER</Text>
+              <Text style={styles.slotValue}>
+                {nonStriker?.playerName || "Not selected"}
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.selectedBox}>
-            <Text>
-              Non-Striker: {lineupData.nonStriker?.name || "Not Selected"}
-            </Text>
-          </View>
+          {battingTeamSquad.map((player) => {
+            const isSelected =
+              striker?._id === player._id || nonStriker?._id === player._id;
 
-          {BATTERS.map((player) => (
-            <TouchableOpacity
-              key={player.id}
-              style={styles.playerCard}
-              onPress={() => {
-                if (!lineupData.striker) {
-                  updateField("striker", player);
-                } else {
-                  updateField("nonStriker", player);
-                }
-              }}
-            >
-              <Text style={styles.playerName}>{player.name}</Text>
-            </TouchableOpacity>
-          ))}
+            return (
+              <TouchableOpacity
+                key={player._id}
+                style={[styles.playerCard, isSelected && styles.playerCardSelected]}
+                onPress={() => handleSelectBatter(player)}
+              >
+                <Text
+                  style={[
+                    styles.playerName,
+                    isSelected && styles.playerNameSelected,
+                  ]}
+                >
+                  {player.playerName}
+                </Text>
+
+                {isSelected && (
+                  <Text style={styles.selectedBadge}>
+                    {striker?._id === player._id ? "Striker" : "Non-striker"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* BOWLER */}
+        {/* ── Opening Bowler ───────────────────────────────────────── */}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Select Opening Bowler</Text>
+          <Text style={styles.title}>Select Opening Bowler</Text>
 
-          <View style={styles.selectedBox}>
-            <Text>{lineupData.openingBowler?.name || "Not Selected"}</Text>
-          </View>
-
-          {BOWLERS.map((player) => (
+          {bowlingTeamSquad.map((player) => (
             <TouchableOpacity
-              key={player.id}
-              style={styles.playerCard}
-              onPress={() => updateField("openingBowler", player)}
+              key={player._id}
+              style={[
+                styles.playerCard,
+                openingBowler?._id === player._id && styles.playerCardSelected,
+              ]}
+              onPress={() => setOpeningBowler(player)}
             >
-              <Text style={styles.playerName}>{player.name}</Text>
+              <Text
+                style={[
+                  styles.playerName,
+                  openingBowler?._id === player._id && styles.playerNameSelected,
+                ]}
+              >
+                {player.playerName}
+              </Text>
+
+              {openingBowler?._id === player._id && (
+                <Text style={styles.selectedBadge}>Bowler</Text>
+              )}
             </TouchableOpacity>
           ))}
         </View>
       </ScrollView>
 
-      <TouchableOpacity style={styles.button} onPress={handleStartChase}>
-        <Text style={styles.buttonText}>Start Chase</Text>
+      <TouchableOpacity
+        style={[
+          styles.button,
+          (!striker || !nonStriker || !openingBowler) && styles.buttonDisabled,
+        ]}
+        onPress={handleStartChase}
+        disabled={starting}
+      >
+        {starting ? (
+          <ActivityIndicator size="small" color={COLORS.onPrimary} />
+        ) : (
+          <Text style={styles.buttonText}>Start Chase</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -187,135 +257,154 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 140,
+  },
+
+  heading: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.onSurface,
+    marginBottom: 16,
+  },
+
   targetCard: {
-    backgroundColor: COLORS.primary,
-
+    backgroundColor: COLORS.secondaryContainer,
     borderRadius: 16,
-
-    padding: 24,
-
+    padding: 20,
     alignItems: "center",
-
     marginBottom: 16,
   },
 
   targetLabel: {
-    color: "#fff",
-
-    fontSize: 14,
-
-    fontWeight: "600",
-  },
-
-  targetScore: {
-    color: "#fff",
-
-    fontSize: 52,
-
+    fontSize: 12,
     fontWeight: "700",
+    color: COLORS.onSecondaryContainer,
+    letterSpacing: 0.8,
   },
 
-  targetInfo: {
-    color: "#fff",
-  },
-
-  infoCard: {
-    flexDirection: "row",
-
-    backgroundColor: "#fff",
-
-    borderRadius: 16,
-
-    padding: 16,
-
-    marginBottom: 16,
-  },
-
-  infoItem: {
-    flex: 1,
-
-    alignItems: "center",
-  },
-
-  infoValue: {
-    fontSize: 24,
-
+  targetValue: {
+    fontSize: 40,
     fontWeight: "700",
-
-    color: COLORS.primary,
-  },
-
-  infoLabel: {
-    color: "#666",
-
+    color: COLORS.onSecondaryContainer,
     marginTop: 4,
   },
 
+  targetSub: {
+    fontSize: 12,
+    color: COLORS.onSecondaryContainer,
+    opacity: 0.75,
+    marginTop: 2,
+  },
+
   card: {
-    backgroundColor: "#fff",
-
-    borderRadius: 16,
-
+    backgroundColor: COLORS.surfaceContainerLowest,
+    borderRadius: 12,
     padding: 16,
-
-    marginBottom: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
   },
 
-  cardTitle: {
-    fontSize: 18,
-
+  title: {
+    fontSize: 17,
     fontWeight: "700",
-
-    marginBottom: 16,
+    color: COLORS.onSurface,
+    marginBottom: 14,
   },
 
-  selectedBox: {
+  slotRow: {
+    flexDirection: "row",
+    marginBottom: 16,
+    gap: 8,
+  },
+
+  slot: {
+    flex: 1,
     padding: 12,
-
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
     borderRadius: 10,
+    borderStyle: "dashed",
+  },
 
-    backgroundColor: "#F5F5F5",
+  slotFilled: {
+    borderStyle: "solid",
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.surfaceContainer,
+  },
 
-    marginBottom: 10,
+  slotLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.onSurfaceVariant,
+    letterSpacing: 0.4,
+  },
+
+  slotValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.onSurface,
+    marginTop: 4,
   },
 
   playerCard: {
-    padding: 14,
-
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
+    borderBottomColor: COLORS.outlineVariant,
+  },
 
-    borderBottomColor: "#eee",
+  playerCardSelected: {
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: 8,
+    paddingHorizontal: 8,
   },
 
   playerName: {
+    color: COLORS.onSurface,
     fontWeight: "600",
+    fontSize: 15,
+  },
+
+  playerNameSelected: {
+    color: COLORS.primary,
+  },
+
+  selectedBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.primary,
+    backgroundColor: COLORS.primaryContainer,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    overflow: "hidden",
   },
 
   button: {
     position: "absolute",
-
     left: 16,
-
     right: 16,
-
     bottom: 16,
-
     height: 56,
-
-    borderRadius: 12,
-
     backgroundColor: COLORS.primary,
-
+    borderRadius: 12,
     justifyContent: "center",
-
     alignItems: "center",
   },
 
+  buttonDisabled: {
+    opacity: 0.55,
+  },
+
   buttonText: {
-    color: "#fff",
-
-    fontSize: 16,
-
+    color: COLORS.onPrimary,
     fontWeight: "700",
+    fontSize: 16,
   },
 });

@@ -32,12 +32,7 @@ export default function LeadershipCard({
       <View
         style={[
           styles.badge,
-          {
-            backgroundColor:
-              type === "C"
-                ? "#0B7A0B"
-                : "#FF9800",
-          },
+          type === "C" ? styles.badgeCaptain : styles.badgeViceCaptain,
         ]}
       >
         <Text
@@ -108,6 +103,14 @@ const styles = StyleSheet.create({
       "center",
 
     alignItems: "center",
+  },
+
+  badgeCaptain: {
+    backgroundColor: "#0B7A0B",
+  },
+
+  badgeViceCaptain: {
+    backgroundColor: "#FF9800",
   },
 
   badgeText: {

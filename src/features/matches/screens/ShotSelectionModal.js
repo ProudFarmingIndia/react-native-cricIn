@@ -4,91 +4,121 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
 
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+import { COLORS } from "../../../constants/colors";
+
 const SHOTS = [
-  "Cover Drive",
-  "Straight Drive",
-  "Pull Shot",
-  "Cut Shot",
-  "Sweep",
-  "Flick",
+  { key: "Straight Drive", icon: "arrow-up" },
+  { key: "Cover Drive", icon: "arrow-up-outline" },
+  { key: "Pull Shot", icon: "arrow-down-outline" },
+  { key: "Hook Shot", icon: "arrow-up-outline" },
+  { key: "Cut Shot", icon: "cut-outline" },
+  { key: "Sweep", icon: "brush-outline" },
+  { key: "Reverse Sweep", icon: "return-up-back-outline" },
+  { key: "Flick", icon: "trending-up-outline" },
+  { key: "Lofted Drive", icon: "arrow-up-circle-outline" },
+  { key: "Defensive", icon: "shield-outline" },
 ];
-
-const TIMINGS = ["Perfect", "Good", "Mistimed"];
-
-const INTENTS = ["Defensive", "Normal", "Aggressive"];
 
 export default function ShotSelectionModal() {
   const navigation = useNavigation();
 
   const route = useRoute();
 
-  const { runs } = route.params;
+  const { matchId, inningsId, runs, batsmanId, bowlerId } = route.params;
 
   const [shotType, setShotType] = useState(null);
 
-  const [timing, setTiming] = useState(null);
-
-  const [intent, setIntent] = useState(null);
-
   const handleContinue = () => {
-    navigation.navigate("BallDirectionModalScreen", {
-      runs,
-      shotType,
-      timing,
-      intent,
-    });
-  };
+  const safeMatchId = route.params?.matchId;
+  const safeInningsId = route.params?.inningsId;
 
+  console.log("[ShotSelection] handleContinue", { shotType, runs, inningsId: safeInningsId });
+
+  if (!safeMatchId || !safeInningsId) {
+    console.warn("Missing match or innings", "Unable to continue because match or innings ID is missing.");
+    return;
+  }
+
+  navigation.navigate("WagonWheelModal", {
+    matchId: safeMatchId,
+    inningsId: safeInningsId,
+    runs,
+    batsmanId,
+    bowlerId,
+    shotType,
+  });
+};
+
+/*
+| Closing the sheet abandons the ball rather than recording a shotless one.
+|
+| Skipping used to save the delivery with shotType: null, which is how
+| half the commentary ended up reading "1 run." with nothing after it.
+| The scorer is choosing between describing the ball and not scoring it
+| yet - not between a full record and a hollow one.
+*/
+
+const onPressCancel = () => {
+  navigation.goBack();
+};
   return (
     <View style={styles.overlay}>
       <View style={styles.modal}>
-        <Text style={styles.title}>Shot Selection</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>Shot Selection</Text>
 
-        <Text style={styles.label}>Shot Type</Text>
+          <TouchableOpacity onPress={onPressCancel}>
+            <Ionicons name="close" size={24} color={COLORS.onSurfaceVariant} />
+          </TouchableOpacity>
+        </View>
 
-        <View style={styles.row}>
-          {SHOTS.map((item) => (
+        <Text style={styles.subtitle}>
+          {runs === 0
+            ? "What shot was played? (no run)"
+            : `What shot was played for ${runs} run${runs !== 1 ? "s" : ""}?`}
+        </Text>
+
+        <View style={styles.grid}>
+          {SHOTS.map((shot) => (
             <TouchableOpacity
-              key={item}
-              style={[styles.chip, shotType === item && styles.selected]}
-              onPress={() => setShotType(item)}
+              key={shot.key}
+              style={[styles.card, shotType === shot.key && styles.cardSelected]}
+              activeOpacity={0.75}
+              onPress={() => setShotType(shot.key)}
             >
-              <Text>{item}</Text>
+              <Ionicons
+                name={shot.icon}
+                size={22}
+                color={shotType === shot.key ? COLORS.primary : COLORS.onSurfaceVariant}
+              />
+
+              <Text
+                style={[
+                  styles.cardText,
+                  shotType === shot.key && styles.cardTextSelected,
+                ]}
+              >
+                {shot.key}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Timing</Text>
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.skipButton} onPress={onPressCancel}>
+            <Text style={styles.skipText}>Cancel</Text>
+          </TouchableOpacity>
 
-        <View style={styles.row}>
-          {TIMINGS.map((item) => (
-            <TouchableOpacity
-              key={item}
-              style={[styles.chip, timing === item && styles.selected]}
-              onPress={() => setTiming(item)}
-            >
-              <Text>{item}</Text>
-            </TouchableOpacity>
-          ))}
+          <TouchableOpacity
+            style={[styles.continueButton, !shotType && styles.continueButtonDisabled]}
+            disabled={!shotType}
+            onPress={handleContinue}
+          >
+            <Text style={styles.continueText}>Continue</Text>
+          </TouchableOpacity>
         </View>
-
-        <Text style={styles.label}>Intent</Text>
-
-        <View style={styles.row}>
-          {INTENTS.map((item) => (
-            <TouchableOpacity
-              key={item}
-              style={[styles.chip, intent === item && styles.selected]}
-              onPress={() => setIntent(item)}
-            >
-              <Text>{item}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity style={styles.button} onPress={handleContinue}>
-          <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -97,59 +127,100 @@ export default function ShotSelectionModal() {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.5)",
-    padding: 20,
   },
 
   modal: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
+    backgroundColor: COLORS.surfaceContainerLowest,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: 20,
+    maxHeight: "85%",
+  },
+
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 
   title: {
     fontSize: 20,
     fontWeight: "700",
-    marginBottom: 20,
+    color: COLORS.primary,
   },
 
-  label: {
-    fontWeight: "700",
-    marginTop: 12,
-    marginBottom: 8,
+  subtitle: {
+    marginTop: 6,
+    marginBottom: 18,
+    color: COLORS.onSurfaceVariant,
   },
 
-  row: {
+  grid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    justifyContent: "space-between",
   },
 
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-
-  selected: {
-    backgroundColor: "#DFF6DD",
-  },
-
-  button: {
-    backgroundColor: "#2E7D32",
-    height: 50,
+  card: {
+    width: "48%",
+    paddingVertical: 16,
     borderRadius: 12,
-    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
     alignItems: "center",
-    marginTop: 20,
+    marginBottom: 10,
   },
 
-  buttonText: {
-    color: "#fff",
+  cardSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.surfaceContainer,
+  },
+
+  cardText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.onSurface,
+    textAlign: "center",
+    marginTop: 6,
+  },
+
+  cardTextSelected: {
+    color: COLORS.primary,
+  },
+
+  footer: {
+    flexDirection: "row",
+    marginTop: 12,
+  },
+
+  skipButton: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginRight: 8,
+  },
+
+  skipText: {
+    color: COLORS.onSurfaceVariant,
+    fontWeight: "700",
+  },
+
+  continueButton: {
+    flex: 2,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+
+  continueButtonDisabled: {
+    opacity: 0.5,
+  },
+
+  continueText: {
+    color: COLORS.onPrimary,
     fontWeight: "700",
   },
 });

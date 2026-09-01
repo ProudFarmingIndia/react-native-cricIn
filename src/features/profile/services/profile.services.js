@@ -15,3 +15,9 @@ export const updateProfileApi = (payload) => {
 export const createPlayerProfileApi = (payload) => {
   return apiClient.post(ENDPOINTS.PLAYER.CREATE, payload);
 };
+
+// GET /api/players/:id — view another player's profile (read-only, no mobile number returned)
+export const getPlayerByIdApi = async (playerId) => {
+  const response = await apiClient.get(ENDPOINTS.PLAYER.BY_ID(playerId));
+  return response.data?.data ?? response.data;
+};

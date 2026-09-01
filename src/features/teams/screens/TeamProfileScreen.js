@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 import {
   ScrollView,
-  View,
+  StyleSheet,
 } from "react-native";
 
 import TeamProfileHero from "../components/TeamProfileHero";
@@ -60,9 +60,7 @@ export default function TeamProfileScreen({
 
   return (
     <ScrollView
-      contentContainerStyle={{
-        padding: 16,
-      }}
+      contentContainerStyle={styles.scrollContent}
     >
       <TeamProfileHero
         team={team}
@@ -95,3 +93,9 @@ export default function TeamProfileScreen({
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  scrollContent: {
+    padding: 16,
+  },
+});

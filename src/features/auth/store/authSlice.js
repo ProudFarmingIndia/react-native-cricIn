@@ -2,6 +2,24 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { sendOtpApi, verifyOtpApi } from "../services/auth.services";
 
+/*
+|--------------------------------------------------------------------------
+| Persisted Session Keys
+|--------------------------------------------------------------------------
+|
+| The token alone is not enough. state.auth.user carries the User _id that
+| every ownership check compares against - team.userId, match.userId - and
+| it was only ever set by verifyOtp.fulfilled. After a reload it was null,
+| so isOwner evaluated false for the actual owner: Team Settings showed
+| "Leave Team" instead of "Delete Team", and the owner lost owner-only
+| controls until they logged in again.
+|
+*/
+
+export const TOKEN_KEY = "accessToken";
+
+export const USER_KEY = "authUser";
+
 // ─── Send OTP ─────────────────────────────────────────────────────────────────
 export const sendOtp = createAsyncThunk(
   "auth/sendOtp",
@@ -23,27 +41,19 @@ export const verifyOtp = createAsyncThunk(
   async ({ mobile, otp }, thunkAPI) => {
     try {
       const response = await verifyOtpApi(mobile, otp);
+
       const token = response.data?.data?.token;
 
-      console.log(
-        "TOKEN FROM API =>",
-        token
-      );
-      // Save to AsyncStorage so interceptor picks it up on next launch
-      if (token) {
-        await AsyncStorage.setItem("accessToken", token);
-        console.log(
-          "TOKEN SAVED TO STORAGE"
-        );
-         const saved =
-          await AsyncStorage.getItem(
-            "accessToken"
-          );
+      const user = response.data?.data?.user;
 
-        console.log(
-          "VERIFY STORAGE =>",
-          saved
-        );
+      // Persisted so the interceptor and the ownership checks both survive
+      // a relaunch.
+      if (token) {
+        await AsyncStorage.setItem(TOKEN_KEY, token);
+      }
+
+      if (user) {
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
       }
 
       return response.data;
@@ -70,16 +80,28 @@ const authSlice = createSlice({
   initialState,
 
   reducers: {
-    // Called by AppNavigator on launch to restore persisted token
+    /*
+    | Called by AppNavigator on launch. Accepts either a bare token string
+    | (the old shape, kept so nothing breaks) or { token, user }.
+    */
     restoreToken(state, action) {
-      state.token = action.payload;
+      const payload = action.payload;
+
+      if (payload && typeof payload === "object") {
+        state.token = payload.token ?? null;
+        state.user = payload.user ?? null;
+        return;
+      }
+
+      state.token = payload;
     },
 
     logout(state) {
       state.token = null;
       state.user = null;
       state.phone = null;
-      AsyncStorage.removeItem("accessToken");
+
+      AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
     },
 
     clearError(state) {
@@ -111,7 +133,7 @@ const authSlice = createSlice({
       .addCase(verifyOtp.fulfilled, (state, action) => {
         state.loading = false;
         state.token = action.payload?.data?.token;
-        state.user = action.payload?.data?.user;
+        state.user = action.payload?.data?.user ?? null;
       })
       .addCase(verifyOtp.rejected, (state, action) => {
         state.loading = false;

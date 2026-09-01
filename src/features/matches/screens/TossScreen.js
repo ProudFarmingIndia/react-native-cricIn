@@ -7,81 +7,92 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
 
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+
+import { updateMatchApi } from "../services/matches.services";
 
 import { COLORS } from "../../../constants/colors";
+
+/*
+|--------------------------------------------------------------------------
+| Toss Screen
+|--------------------------------------------------------------------------
+|
+| Expects via route.params: matchId, teamA, teamB (with .squad already
+| set from SquadSelectionScreen).
+|
+| Persists tossWinner/tossDecision to the Match record, then forwards
+| the batting/bowling team split to the opening-pair/bowler screen.
+*/
 
 export default function TossScreen() {
   const navigation = useNavigation();
 
-  const [tossData, setTossData] = useState({
-    call: "Heads",
+  const route = useRoute();
 
-    tossWinner: null,
+  const { matchId, teamA, teamB } = route.params || {};
 
-    electedTo: null,
+  const [call, setCall] = useState("Heads");
+  const [coinSide, setCoinSide] = useState(null);
+  const [tossWinnerId, setTossWinnerId] = useState(null);
+  const [electedTo, setElectedTo] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-    coinSide: "🪙",
-  });
-
-  const TEAMS = [
-    {
-      id: "1",
-      name: "Lions CC",
-      icon: "🦁",
-    },
-    {
-      id: "2",
-      name: "Wolves United",
-      icon: "🐺",
-    },
-  ];
-
-  const updateField = (field, value) => {
-    setTossData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
+  const teams = [teamA, teamB].filter(Boolean);
 
   const handleFlipCoin = () => {
     const result = Math.random() > 0.5 ? "Heads" : "Tails";
-
-    updateField("coinSide", result === "Heads" ? "🪙" : "🔘");
-
-    Alert.alert("Coin Result", result);
+    setCoinSide(result);
   };
 
-  const handleContinue = () => {
-    if (!tossData.tossWinner) {
-      Alert.alert("Please select toss winner");
-
+  const handleContinue = async () => {
+    if (!tossWinnerId) {
+      Alert.alert("Please select the toss winner");
       return;
     }
 
-    if (!tossData.electedTo) {
+    if (!electedTo) {
       Alert.alert("Please select Bat or Bowl");
-
       return;
     }
 
-    navigation.navigate("PlayingXISelectionScreen");
+    const tossWinnerTeam = teams.find((t) => t._id === tossWinnerId);
+    const tossLoserTeam = teams.find((t) => t._id !== tossWinnerId);
+
+    const battingTeam = electedTo === "Bat" ? tossWinnerTeam : tossLoserTeam;
+    const bowlingTeam = electedTo === "Bat" ? tossLoserTeam : tossWinnerTeam;
+
+    try {
+      setSaving(true);
+
+      await updateMatchApi(matchId, {
+        tossWinner: tossWinnerId,
+        tossDecision: electedTo,
+      });
+
+      navigation.navigate("MatchLineUpScreen", {
+        matchId,
+        battingTeam,
+        bowlingTeam,
+      });
+    } catch (error) {
+      Alert.alert(
+        "Failed",
+        error.response?.data?.message || "Could not save the toss result.",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={{
-          padding: 16,
-          paddingBottom: 140,
-        }}
-      >
-        {/* Coin Section */}
-
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.coinCard}>
           <Text style={styles.sectionTitle}>Coin Toss</Text>
 
@@ -89,50 +100,56 @@ export default function TossScreen() {
             {["Heads", "Tails"].map((item) => (
               <TouchableOpacity
                 key={item}
-                style={[
-                  styles.choiceButton,
-
-                  tossData.call === item && styles.selectedChoice,
-                ]}
-                onPress={() => updateField("call", item)}
+                style={[styles.choiceButton, call === item && styles.selectedChoice]}
+                onPress={() => setCall(item)}
               >
-                <Text>{item}</Text>
+                <Text
+                  style={[
+                    styles.choiceText,
+                    call === item && styles.selectedChoiceText,
+                  ]}
+                >
+                  {item}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.coin}>{tossData.coinSide}</Text>
+          <Ionicons
+            name="disc-outline"
+            size={64}
+            color={COLORS.secondaryContainer}
+            style={styles.coinIcon}
+          />
+
+          {coinSide && (
+            <Text style={styles.coinResultText}>
+              Result: {coinSide} {coinSide === call ? "🎉" : ""}
+            </Text>
+          )}
 
           <TouchableOpacity style={styles.flipButton} onPress={handleFlipCoin}>
-            <Ionicons name="refresh" size={20} color="#fff" />
-
+            <Ionicons name="refresh" size={20} color={COLORS.onPrimary} />
             <Text style={styles.flipText}>Flip Coin</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Toss Winner */}
-
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Toss Winner</Text>
 
-          {TEAMS.map((team) => (
+          {teams.map((team) => (
             <TouchableOpacity
-              key={team.id}
+              key={team._id}
               style={[
                 styles.teamCard,
-
-                tossData.tossWinner === team.id && styles.selectedCard,
+                tossWinnerId === team._id && styles.selectedCard,
               ]}
-              onPress={() => updateField("tossWinner", team.id)}
+              onPress={() => setTossWinnerId(team._id)}
             >
-              <Text style={styles.teamEmoji}>{team.icon}</Text>
-
-              <Text style={styles.teamName}>{team.name}</Text>
+              <Text style={styles.teamName}>{team.teamName}</Text>
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* Decision */}
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Elected To</Text>
@@ -143,10 +160,9 @@ export default function TossScreen() {
                 key={item}
                 style={[
                   styles.actionCard,
-
-                  tossData.electedTo === item && styles.selectedCard,
+                  electedTo === item && styles.selectedCard,
                 ]}
-                onPress={() => updateField("electedTo", item)}
+                onPress={() => setElectedTo(item)}
               >
                 <Text style={styles.actionText}>{item}</Text>
               </TouchableOpacity>
@@ -154,22 +170,28 @@ export default function TossScreen() {
           </View>
         </View>
 
-        {/* Summary */}
-
-        {tossData.tossWinner && tossData.electedTo && (
+        {tossWinnerId && electedTo && (
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Toss Result</Text>
 
             <Text style={styles.summaryText}>
-              {TEAMS.find((t) => t.id === tossData.tossWinner)?.name} won the
-              toss and elected to {tossData.electedTo} first.
+              {teams.find((t) => t._id === tossWinnerId)?.teamName} won the
+              toss and elected to {electedTo.toLowerCase()} first.
             </Text>
           </View>
         )}
       </ScrollView>
 
-      <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-        <Text style={styles.continueText}>Continue To Playing XI</Text>
+      <TouchableOpacity
+        style={styles.continueButton}
+        onPress={handleContinue}
+        disabled={saving}
+      >
+        {saving ? (
+          <ActivityIndicator size="small" color={COLORS.onPrimary} />
+        ) : (
+          <Text style={styles.continueText}>Continue To Playing XI</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -181,185 +203,156 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  card: {
-    backgroundColor: "#fff",
-
-    borderRadius: 16,
-
+  scrollContent: {
     padding: 16,
+    paddingBottom: 140,
+  },
 
+  coinIcon: {
+    alignSelf: "center",
+    marginVertical: 12,
+  },
+
+  card: {
+    backgroundColor: COLORS.surfaceContainerLowest,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
   },
 
   coinCard: {
-    backgroundColor: "#fff",
-
+    backgroundColor: COLORS.surfaceContainerLowest,
     borderRadius: 16,
-
     padding: 20,
-
-    alignItems: "center",
-
     marginBottom: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
   },
 
   sectionTitle: {
-    fontSize: 18,
-
+    fontSize: 16,
     fontWeight: "700",
-
-    marginBottom: 16,
+    color: COLORS.onSurface,
+    marginBottom: 12,
+    alignSelf: "flex-start",
   },
 
   row: {
     flexDirection: "row",
+    justifyContent: "center",
   },
 
   choiceButton: {
-    paddingHorizontal: 20,
-
     paddingVertical: 10,
-
-    borderWidth: 1,
-
-    borderColor: "#ddd",
-
-    borderRadius: 30,
-
-    marginHorizontal: 5,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    backgroundColor: COLORS.surfaceContainer,
+    marginHorizontal: 6,
   },
 
   selectedChoice: {
-    backgroundColor: "#E8F5E9",
-
-    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
   },
 
-  coin: {
-    fontSize: 80,
+  choiceText: {
+    fontWeight: "700",
+    color: COLORS.onSurface,
+  },
 
-    marginVertical: 20,
+  selectedChoiceText: {
+    color: COLORS.onPrimary,
+  },
+
+  coinResultText: {
+    textAlign: "center",
+    fontWeight: "700",
+    color: COLORS.onSurface,
+    marginBottom: 8,
   },
 
   flipButton: {
     flexDirection: "row",
-
-    alignItems: "center",
-
     backgroundColor: COLORS.primary,
-
-    paddingHorizontal: 20,
-
+    borderRadius: 12,
     paddingVertical: 12,
-
-    borderRadius: 30,
+    paddingHorizontal: 24,
+    alignItems: "center",
   },
 
   flipText: {
-    color: "#fff",
-
-    marginLeft: 8,
-
+    color: COLORS.onPrimary,
     fontWeight: "700",
+    marginLeft: 8,
   },
 
   teamCard: {
     flexDirection: "row",
-
     alignItems: "center",
-
-    padding: 12,
-
+    padding: 14,
     borderRadius: 12,
-
     borderWidth: 1,
-
-    borderColor: "#eee",
-
-    marginBottom: 10,
+    borderColor: COLORS.outlineVariant,
+    marginBottom: 8,
   },
 
   selectedCard: {
     borderColor: COLORS.primary,
-
-    backgroundColor: "#E8F5E9",
-  },
-
-  teamEmoji: {
-    fontSize: 28,
+    backgroundColor: COLORS.surfaceContainer,
   },
 
   teamName: {
-    marginLeft: 12,
-
     fontWeight: "700",
+    color: COLORS.onSurface,
   },
 
   actionCard: {
     flex: 1,
-
-    padding: 20,
-
-    borderRadius: 12,
-
-    borderWidth: 1,
-
-    borderColor: "#ddd",
-
     alignItems: "center",
-
-    marginHorizontal: 5,
+    paddingVertical: 20,
+    marginHorizontal: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
   },
 
   actionText: {
     fontWeight: "700",
+    color: COLORS.onSurface,
   },
 
   summaryCard: {
-    backgroundColor: "#E8F5E9",
-
+    backgroundColor: COLORS.primaryContainer,
     borderRadius: 16,
-
     padding: 16,
   },
 
   summaryTitle: {
-    fontSize: 18,
-
+    color: COLORS.onPrimaryContainer,
     fontWeight: "700",
-
-    marginBottom: 8,
+    marginBottom: 6,
   },
 
   summaryText: {
-    fontSize: 16,
+    color: COLORS.onPrimaryContainer,
   },
 
   continueButton: {
     position: "absolute",
-
-    bottom: 16,
-
+    bottom: 20,
     left: 16,
-
     right: 16,
-
-    height: 56,
-
     backgroundColor: COLORS.primary,
-
     borderRadius: 12,
-
-    justifyContent: "center",
-
+    paddingVertical: 16,
     alignItems: "center",
   },
 
   continueText: {
-    color: "#fff",
-
-    fontSize: 16,
-
+    color: COLORS.onPrimary,
     fontWeight: "700",
+    fontSize: 15,
   },
 });

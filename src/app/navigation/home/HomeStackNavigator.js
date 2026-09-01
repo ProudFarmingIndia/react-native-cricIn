@@ -15,6 +15,8 @@ export default function HomeStackNavigator() {
       }}
     >
       <Stack.Screen name="HomeScreen" component={HomeScreen} />
+      {/* NotificationScreen is registered on RootNavigator instead, so the
+          header bell resolves from every tab and not just Home. */}
     </Stack.Navigator>
   );
 }

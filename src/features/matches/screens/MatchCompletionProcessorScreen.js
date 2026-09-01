@@ -1,7 +1,4 @@
-import React, {
-  useEffect,
-  useState,
-} from "react";
+import React, { useEffect, useState } from "react";
 
 import {
   View,
@@ -10,7 +7,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 
 import { COLORS } from "../../../constants/colors";
 
@@ -21,226 +18,210 @@ const STEPS = [
   "Generating Scorecard",
 ];
 
-export default function MatchCompletionProcessorScreen() {
-  const navigation =
-    useNavigation();
+/*
+|--------------------------------------------------------------------------
+| MatchCompletionProcessorScreen
+|--------------------------------------------------------------------------
+|
+| Expects via route.params: matchId (required).
+|
+| ⚠ Batch 5 Bug Fix:
+|   Previously `navigation.replace("MatchCenterScreen")` was called
+|   without passing `matchId`. MatchCenterScreen reads matchId from
+|   route.params, so it would silently fail to load any data.
+|
+|   Fix: read matchId from route.params and forward it in the replace call.
+|
+| UI: shows an animated step-through of processing stages over 5 seconds
+|   (purely cosmetic — the actual stats update happens async on the
+|   backend, triggered by updateMatchResult). After the countdown,
+|   navigates to MatchCenterScreen with the matchId.
+|
+*/
 
-  const [currentStep, setCurrentStep] =
-    useState(0);
+export default function MatchCompletionProcessorScreen() {
+  const navigation = useNavigation();
+  const route = useRoute();
+
+  // ⚠ Batch 5 fix: read matchId from params
+  const { matchId } = route.params || {};
+
+  const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
-    const interval =
-      setInterval(() => {
-        setCurrentStep(
-          (prev) => {
-            if (
-              prev <
-              STEPS.length - 1
-            ) {
-              return prev + 1;
-            }
+    const interval = setInterval(() => {
+      setCurrentStep((prev) =>
+        prev < STEPS.length - 1 ? prev + 1 : prev,
+      );
+    }, 1000);
 
-            return prev;
-          }
-        );
-      }, 1200);
-
-    const timeout =
-      setTimeout(() => {
-        navigation.replace(
-          "MatchCenterScreen"
-        );
-      }, 5000);
+    const timeout = setTimeout(() => {
+      /*
+       * ⚠ Batch 5 fix: forward matchId so MatchCenterScreen can load data.
+       * If matchId is somehow missing, MatchCenterScreen will show its own
+       * empty/error state gracefully.
+       */
+      navigation.replace("MatchCenterScreen", { matchId });
+    }, 5000);
 
     return () => {
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  }, []);
+  }, [navigation, matchId]);
 
   return (
     <View style={styles.container}>
-      {/* SUCCESS ICON */}
+      {/* ── Icon ─────────────────────────────────────────────── */}
 
-      <View
-        style={styles.iconContainer}
-      >
-        <Text
-          style={styles.icon}
-        >
-          🏏
-        </Text>
+      <View style={styles.iconContainer}>
+        <Text style={styles.icon}>🏏</Text>
       </View>
 
-      {/* TITLE */}
+      {/* ── Title ────────────────────────────────────────────── */}
 
-      <Text style={styles.title}>
-        Match Completed
-      </Text>
+      <Text style={styles.title}>Match Completed!</Text>
 
-      <Text style={styles.subTitle}>
-        Finalizing match
-        analytics...
-      </Text>
+      <Text style={styles.subTitle}>Finalizing match analytics...</Text>
 
-      {/* LOADER */}
+      {/* ── Loader ───────────────────────────────────────────── */}
 
       <ActivityIndicator
         size="large"
         color={COLORS.primary}
-        style={{
-          marginVertical: 24,
-        }}
+        style={styles.loader}
       />
 
-      {/* STEPS */}
+      {/* ── Steps ────────────────────────────────────────────── */}
 
-      <View
-        style={styles.stepsContainer}
-      >
-        {STEPS.map(
-          (
-            step,
-            index
-          ) => (
-            <View
-              key={step}
-              style={
-                styles.stepRow
-              }
-            >
+      <View style={styles.stepsContainer}>
+        {STEPS.map((step, index) => {
+          const isDone = index < currentStep;
+          const isCurrent = index === currentStep;
+
+          return (
+            <View key={step} style={styles.stepRow}>
               <View
                 style={[
                   styles.statusDot,
-
-                  index <=
-                    currentStep && {
-                    backgroundColor:
-                      COLORS.primary,
-                  },
+                  isDone && styles.statusDotDone,
+                  isCurrent && styles.statusDotActive,
                 ]}
               />
 
               <Text
                 style={[
                   styles.stepText,
-
-                  index <=
-                    currentStep && {
-                    color:
-                      COLORS.primary,
-                    fontWeight:
-                      "700",
-                  },
+                  isDone && styles.stepTextDone,
+                  isCurrent && styles.stepTextActive,
                 ]}
               >
                 {step}
               </Text>
+
+              {isDone && <Text style={styles.checkmark}> ✓</Text>}
             </View>
-          )
-        )}
+          );
+        })}
       </View>
 
-      <Text style={styles.footer}>
-        Redirecting to Match
-        Center...
-      </Text>
+      <Text style={styles.footer}>Redirecting to Match Center...</Text>
     </View>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    container: {
-      flex: 1,
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+    backgroundColor: COLORS.background,
+  },
 
-      justifyContent:
-        "center",
+  iconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: COLORS.primary + "18",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
 
-      alignItems: "center",
+  icon: {
+    fontSize: 48,
+  },
 
-      padding: 24,
+  title: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
 
-      backgroundColor:
-        COLORS.background,
-    },
+  subTitle: {
+    marginTop: 8,
+    color: COLORS.onSurfaceVariant,
+    textAlign: "center",
+    fontSize: 14,
+  },
 
-    iconContainer: {
-      width: 100,
+  loader: {
+    marginVertical: 28,
+  },
 
-      height: 100,
+  stepsContainer: {
+    width: "100%",
+    marginBottom: 30,
+  },
 
-      borderRadius: 50,
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
 
-      backgroundColor:
-        "#E8F5E9",
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.outlineVariant,
+    marginRight: 12,
+  },
 
-      justifyContent:
-        "center",
+  statusDotActive: {
+    backgroundColor: COLORS.primary,
+  },
 
-      alignItems: "center",
+  statusDotDone: {
+    backgroundColor: "#2e7d32",
+  },
 
-      marginBottom: 20,
-    },
+  stepText: {
+    fontSize: 15,
+    color: COLORS.onSurfaceVariant,
+    flex: 1,
+  },
 
-    icon: {
-      fontSize: 48,
-    },
+  stepTextActive: {
+    color: COLORS.primary,
+    fontWeight: "700",
+  },
 
-    title: {
-      fontSize: 28,
+  stepTextDone: {
+    color: "#2e7d32",
+    fontWeight: "600",
+  },
 
-      fontWeight: "700",
+  checkmark: {
+    color: "#2e7d32",
+    fontWeight: "700",
+    fontSize: 14,
+  },
 
-      color: COLORS.primary,
-    },
-
-    subTitle: {
-      marginTop: 8,
-
-      color: "#666",
-
-      textAlign: "center",
-    },
-
-    stepsContainer: {
-      width: "100%",
-
-      marginTop: 24,
-    },
-
-    stepRow: {
-      flexDirection: "row",
-
-      alignItems: "center",
-
-      marginBottom: 16,
-    },
-
-    statusDot: {
-      width: 12,
-
-      height: 12,
-
-      borderRadius: 6,
-
-      backgroundColor:
-        "#D9D9D9",
-
-      marginRight: 12,
-    },
-
-    stepText: {
-      fontSize: 16,
-
-      color: "#666",
-    },
-
-    footer: {
-      marginTop: 30,
-
-      color: "#999",
-
-      fontSize: 14,
-    },
-  });
+  footer: {
+    color: COLORS.onSurfaceVariant,
+    fontSize: 13,
+    fontStyle: "italic",
+  },
+});

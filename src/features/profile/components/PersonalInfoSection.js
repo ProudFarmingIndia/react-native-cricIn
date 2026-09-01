@@ -29,33 +29,44 @@ export default function PersonalInfoSection({
   isEditMode = false,
   updateField,
 }) {
+  // Safe destructuring with defaults in case profile is null/undefined
+  const {
+    playerName = "",
+    bio = "",
+    dob = "",
+    gender = "",
+    city = "",
+    state = "",
+    country = "",
+  } = profile || {};
+
   if (isEditMode) {
     return (
       <SectionCard icon="👤" title="Personal Information">
         <InputField
           label="Player Name"
           placeholder="Enter Player Name"
-          value={profile.playerName}
+          value={playerName || ""}
           onChangeText={(text) => updateField("playerName", text)}
         />
 
         <InputField
           label="Bio"
           placeholder="Tell everyone about yourself..."
-          value={profile.bio}
+          value={bio || ""}
           multiline
           onChangeText={(text) => updateField("bio", text)}
         />
 
         <DatePickerField
           label="Date of Birth"
-          value={profile.dob}
+          value={dob || ""}
           onChange={(date) => updateField("dob", date)}
         />
 
         <SelectField
           label="Gender"
-          value={profile.gender}
+          value={gender || ""}
           options={GENDER_OPTIONS}
           onSelect={(value) => updateField("gender", value)}
         />
@@ -63,21 +74,21 @@ export default function PersonalInfoSection({
         <InputField
           label="City"
           placeholder="City"
-          value={profile.city}
+          value={city || ""}
           onChangeText={(text) => updateField("city", text)}
         />
 
         <InputField
           label="State"
           placeholder="State"
-          value={profile.state}
+          value={state || ""}
           onChangeText={(text) => updateField("state", text)}
         />
 
         <InputField
           label="Country"
           placeholder="Country"
-          value={profile.country}
+          value={country || ""}
           onChangeText={(text) => updateField("country", text)}
         />
       </SectionCard>
@@ -86,23 +97,23 @@ export default function PersonalInfoSection({
 
   return (
     <SectionCard icon="👤" title="Personal Information">
-      <InfoRow label="Player Name" value={profile.playerName} />
+      <InfoRow label="Player Name" value={playerName || ""} />
 
-      <InfoRow label="Date of Birth" value={profile.dob} />
+      <InfoRow label="Date of Birth" value={dob || ""} />
 
-      <InfoRow label="Gender" value={profile.gender} />
+      <InfoRow label="Gender" value={gender || ""} />
 
-      <InfoRow label="City" value={profile.city} />
+      <InfoRow label="City" value={city || ""} />
 
-      <InfoRow label="State" value={profile.state} />
+      <InfoRow label="State" value={state || ""} />
 
-      <InfoRow label="Country" value={profile.country} />
+      <InfoRow label="Country" value={country || ""} />
 
-      {!!profile.bio && (
+      {!!bio && (
         <View style={styles.bioContainer}>
           <Text style={styles.bioLabel}>Bio</Text>
 
-          <Text style={styles.bio}>{profile.bio}</Text>
+          <Text style={styles.bio}>{bio}</Text>
         </View>
       )}
     </SectionCard>
