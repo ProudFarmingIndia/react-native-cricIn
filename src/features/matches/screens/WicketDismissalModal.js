@@ -14,7 +14,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import useScoring from "../../scoring/hooks/useScoring";
 
 import { setPendingBallResult } from "../utils/ballHandoff";
-import { getMatchByIdApi, updateMatchApi } from "../services/matches.services";
+import { getMatchByIdApi } from "../services/matches.services";
 import { COLORS } from "../../../constants/colors";
 
 /* Helpers */
@@ -29,6 +29,31 @@ const DISMISSAL_TYPES = [
   { key: "caught", label: "Caught", needsFielder: true, allowBatsmanChoice: false, creditsBowler: true },
   { key: "stumped", label: "Stumped", needsFielder: true, allowBatsmanChoice: false, creditsBowler: true },
   { key: "runOut", label: "Run Out", needsFielder: true, allowBatsmanChoice: true, creditsBowler: false },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Retirement (Law 25.4)
+  |--------------------------------------------------------------------------
+  |
+  | A batter leaving the crease, which is what this sheet is for - so it
+  | lives here rather than behind a control of its own.
+  |
+  | RETIRED HURT is not a dismissal. No wicket falls, the innings is not a
+  | batter shorter, and the player may come back when the next wicket does.
+  | Because the server stores it with isWicket false, he stays in this
+  | sheet's own incoming-batter list for the rest of the innings - so
+  | "resuming" needs no extra screen anywhere: he is simply there to pick
+  | again next time.
+  |
+  | RETIRED OUT is a dismissal. It costs a wicket, no bowler is credited,
+  | and he does not return.
+  |
+  | Both let the scorer choose WHICH batter walks off, because it is as
+  | often the non-striker.
+  */
+
+  { key: "retiredHurt", label: "Retired Hurt", needsFielder: false, allowBatsmanChoice: true, creditsBowler: false, isRetirement: true },
+  { key: "retiredOut", label: "Retired Out", needsFielder: false, allowBatsmanChoice: true, creditsBowler: false, isRetirement: true },
 ];
 
 export default function WicketDismissalModal() {
@@ -43,6 +68,12 @@ export default function WicketDismissalModal() {
     bowlerId,
     battingSquad = [],
     bowlingSquad = [],
+
+    /*
+    | Everyone already out in this innings. Without it the "new batsman"
+    | list offers players who have been dismissed - see availableNewBatsmen.
+    */
+    dismissedPlayerIds = [],
   } = route.params || {};
 
   const { addBall } = useScoring();
@@ -107,7 +138,10 @@ export default function WicketDismissalModal() {
     if (!dismissalKey) return false;
     if (!outBatsmanId) return false;
     if (needsFielder(dismissalKey) && !fielderId) return false;
-    if (!newBatsmanId) return false;
+
+    // No batter required when there is nobody left to send in.
+    if (!isLastWicket && !newBatsmanId) return false;
+
     return true;
   };
 
@@ -130,6 +164,18 @@ export default function WicketDismissalModal() {
       nextBatsmanId: newBatsmanId,
       bowlerCredit: creditsBowler(dismissalKey),
       runs: 0,
+
+      /*
+      | isWicket and isLegalDelivery are sent the same way for a retirement
+      | as for a dismissal, and the SERVER decides what they really mean -
+      | a retired-hurt row ends up with no wicket and no ball counted.
+      |
+      | That is on purpose. The rule about whether a wicket falls is a rule
+      | of cricket, and every other rule of cricket in this app is enforced
+      | on the server precisely so a client cannot get one wrong. Deciding
+      | it here would put it in two places and let them disagree.
+      */
+
       isLegalDelivery: true,
     };
 
@@ -137,20 +183,17 @@ export default function WicketDismissalModal() {
       const result = await addBall(payload);
       if (!result || !result.success) {
         setSubmitting(false);
-        Alert.alert("Failed", result?.error || "Could not record the wicket.");
+        Alert.alert("Failed", result?.error || "Could not record that.");
         return;
       }
 
-      // Persist new batsman to match playing XI (safe convention)
-      try {
-        const battingTeamId = result?.data?.innings?.battingTeam || match?.teamA?._id || match?.teamB?._id || null;
-        if (battingTeamId && match) {
-          const patch = { addPlayerToInnings: { inningsId, playerId: newBatsmanId } };
-          await updateMatchApi(matchId, patch);
-        }
-      } catch (e) {
-        console.warn("Failed to persist new batsman:", e?.message || e);
-      }
+      /*
+      | A call to updateMatchApi({ addPlayerToInnings: ... }) used to sit
+      | here. No such field exists anywhere in the backend, and updateMatch
+      | strips anything outside its allow-list, so it was a no-op whose
+      | failure was only console.warn'd. Removed rather than left to look
+      | like it does something.
+      */
 
       setSubmitting(false);
       /*
@@ -191,12 +234,40 @@ export default function WicketDismissalModal() {
     );
   };
 
-  const availableNewBatsmen = battingPlayers.filter(
-    (p) =>
-      String(p._id || p.id) !== String(outBatsmanId) &&
-      String(p._id || p.id) !== String(strikerId) &&
-      String(p._id || p.id) !== String(nonStrikerId),
+  /*
+  | Who can walk in: anyone in the batting XI who is not the batter going
+  | out and not the one still at the other end.
+  |
+  | dismissedIds is what was missing. The filter only excluded the current
+  | three, so at nine down the list still offered all nine players who were
+  | ALREADY out - and since a new batter was mandatory, the scorer had to
+  | nominate a dismissed player to record the final wicket, which was then
+  | written to the crease of a finished innings.
+  */
+
+  const dismissedIds = useMemo(
+    () => new Set((dismissedPlayerIds || []).map((id) => String(id))),
+    [dismissedPlayerIds],
   );
+
+  const availableNewBatsmen = battingPlayers.filter((p) => {
+    const id = String(p._id || p.id);
+
+    return (
+      id !== String(outBatsmanId) &&
+      id !== String(strikerId) &&
+      id !== String(nonStrikerId) &&
+      !dismissedIds.has(id)
+    );
+  });
+
+  /*
+  | The last wicket. With nobody left to come in, the innings ends on this
+  | delivery - so a new batter is not required, and asking for one is what
+  | made the tenth wicket unrecordable.
+  */
+
+  const isLastWicket = availableNewBatsmen.length === 0;
 
   return (
     <Modal visible transparent animationType="slide">
@@ -233,8 +304,22 @@ export default function WicketDismissalModal() {
 
             {dismissalKey && (
               <>
-                <Text style={styles.label}>New Batsman</Text>
-                <View style={styles.fieldSection}>{renderAdaptiveList(availableNewBatsmen, newBatsmanId, setNewBatsmanId)}</View>
+                <Text style={styles.label}>
+                  {isLastWicket ? "New Batsman (none left)" : "New Batsman"}
+                </Text>
+                <View style={styles.fieldSection}>
+                  {isLastWicket ? (
+                    <Text style={styles.lastWicketNote}>
+                      This is the last wicket - the innings ends here.
+                    </Text>
+                  ) : (
+                    renderAdaptiveList(
+                      availableNewBatsmen,
+                      newBatsmanId,
+                      setNewBatsmanId,
+                    )
+                  )}
+                </View>
               </>
             )}
 
@@ -266,6 +351,13 @@ const styles = StyleSheet.create({
   */
   littleHeight: {
     height: 16,
+  },
+
+  lastWicketNote: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.onSurfaceVariant,
+    paddingVertical: 8,
   },
 
 

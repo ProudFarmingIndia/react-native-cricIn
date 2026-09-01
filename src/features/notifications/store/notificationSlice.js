@@ -38,6 +38,12 @@ const initialState = {
   // Multi-select mode for bulk mark-read / delete.
   selecting: false,
   selectedIds: [],
+
+  /*
+  | Ids flipped to read optimistically by an in-flight bulk mark, so a
+  | rejection can put exactly those back and nothing else.
+  */
+  pendingReadRollback: [],
 };
 
 /*
@@ -289,6 +295,45 @@ const recomputeUnread = (notifications) =>
 
 /*
 |--------------------------------------------------------------------------
+| Merging A Server Row Into A List Row
+|--------------------------------------------------------------------------
+|
+| markAsRead used to do `state.notifications[idx] = action.payload`, and that
+| REPLACED the list row with the raw document the update returned.
+|
+| The row in the list is not a raw document. getNotifications populates
+| `actorId` into { fullName, profileImage } and attaches a live `status`
+| (PENDING / ACCEPTED / REJECTED, read from the TeamInvitation, not from the
+| notification). The update endpoint returns neither. So every tap swapped an
+| enriched row for a bare one: the sender's name and avatar vanished, and any
+| accept/reject state went with them.
+|
+| Merging keeps whatever the response does not carry. `isRead` and anything
+| else the server actually changed still win, because the payload is spread
+| last.
+*/
+
+const mergeNotification = (existing, incoming) => {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+
+  const merged = { ...existing, ...incoming };
+
+  // A populated actor is an object with a name; a bare one is just an id.
+  if (!incoming.actorId?.fullName && existing.actorId?.fullName) {
+    merged.actorId = existing.actorId;
+  }
+
+  // `status` is attached by the list query only - never lose it to an update.
+  if (incoming.status === undefined && existing.status !== undefined) {
+    merged.status = existing.status;
+  }
+
+  return merged;
+};
+
+/*
+|--------------------------------------------------------------------------
 | Slice
 |--------------------------------------------------------------------------
 */
@@ -420,8 +465,47 @@ const notificationSlice = createSlice({
 
       // ── Bulk ──────────────────────────────────────────────────────────
 
-      .addCase(markManyAsRead.pending, markLoading)
-      .addCase(markManyAsRead.rejected, markError)
+      /*
+      | Same optimistic treatment as the single mark, and for the same
+      | reason - with the extra wrinkle that this one really does 404 on a
+      | server build older than the read-many route, so the rollback is not
+      | hypothetical.
+      |
+      | Only rows that were actually unread are rolled back, so a failed bulk
+      | action cannot un-read something that was already read before it ran.
+      */
+
+      .addCase(markManyAsRead.pending, (state, action) => {
+        state.error = null;
+
+        const ids = new Set(action.meta.arg || []);
+        const flipped = [];
+
+        state.notifications.forEach((notification) => {
+          if (ids.has(notification._id) && !notification.isRead) {
+            notification.isRead = true;
+            flipped.push(notification._id);
+          }
+        });
+
+        state.pendingReadRollback = flipped;
+        state.unreadCount = recomputeUnread(state.notifications);
+      })
+
+      .addCase(markManyAsRead.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+
+        const ids = new Set(state.pendingReadRollback || []);
+
+        state.notifications.forEach((notification) => {
+          if (ids.has(notification._id)) notification.isRead = false;
+        });
+
+        state.pendingReadRollback = [];
+        state.unreadCount = recomputeUnread(state.notifications);
+      })
+
       .addCase(markManyAsRead.fulfilled, (state, action) => {
         state.loading = false;
 
@@ -431,6 +515,7 @@ const notificationSlice = createSlice({
           if (ids.has(notification._id)) notification.isRead = true;
         });
 
+        state.pendingReadRollback = [];
         state.unreadCount = recomputeUnread(state.notifications);
         state.selectedIds = [];
         state.selecting = false;
@@ -454,12 +539,74 @@ const notificationSlice = createSlice({
 
       // ── Mark Read ─────────────────────────────────────────────────────
 
-      .addCase(markNotificationAsRead.pending, markLoading)
-      .addCase(markNotificationAsRead.rejected, markError)
+      /*
+      |----------------------------------------------------------------------
+      | Marking One Read - Optimistically
+      |----------------------------------------------------------------------
+      |
+      | The dot now clears the instant the row is tapped, instead of waiting
+      | for a round trip that nothing was watching.
+      |
+      | This is the actual "I read it and it still says unread" bug. The old
+      | version only flipped `isRead` in `fulfilled`, and the caller
+      | (`handlePress`) neither awaited the thunk nor looked at its result -
+      | so ANY failure was completely invisible: the screen navigated away as
+      | if it had worked, came back, and the notification was still unread
+      | with no error anywhere.
+      |
+      | It fails more often than it looks. On a stale server build there is no
+      | /notifications/read-many route at all and the bulk action 404s; on a
+      | slow connection the write lands after the user has already looked at
+      | the list and formed the opposite impression.
+      |
+      | `meta.arg` is the id that was dispatched, which is what makes the
+      | optimistic update possible before any response exists.
+      |
+      | `rejected` puts it back. An optimistic update that cannot roll back is
+      | just a lie told faster.
+      */
+
+      .addCase(markNotificationAsRead.pending, (state, action) => {
+        state.error = null;
+
+        const id = action.meta.arg;
+        const row = state.notifications.find((n) => n._id === id);
+
+        if (row && !row.isRead) {
+          row.isRead = true;
+          state.unreadCount = recomputeUnread(state.notifications);
+        }
+      })
+
+      .addCase(markNotificationAsRead.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+
+        const id = action.meta.arg;
+        const row = state.notifications.find((n) => n._id === id);
+
+        if (row) {
+          row.isRead = false;
+          state.unreadCount = recomputeUnread(state.notifications);
+        }
+      })
+
       .addCase(markNotificationAsRead.fulfilled, (state, action) => {
         state.loading = false;
-        const idx = state.notifications.findIndex((n) => n._id === action.payload._id);
-        if (idx !== -1) state.notifications[idx] = action.payload;
+
+        const incoming = action.payload;
+        if (!incoming?._id) return;
+
+        const idx = state.notifications.findIndex((n) => n._id === incoming._id);
+
+        if (idx !== -1) {
+          // Merge, never replace - see mergeNotification.
+          state.notifications[idx] = mergeNotification(
+            state.notifications[idx],
+            incoming,
+          );
+        }
+
         state.unreadCount = recomputeUnread(state.notifications);
       })
 

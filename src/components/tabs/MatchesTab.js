@@ -152,10 +152,19 @@ export default function MatchesTab() {
     [recentMatches],
   );
 
+  /*
+  | Only the match's scorer is sent to the scoring pad. Everyone else -
+  | including the opposing captain - gets the match details screen.
+  |
+  | This used to route every viewer of a live match straight into the
+  | scoring pad, where the server rejected their first ball with an error
+  | they had no way to understand.
+  */
+
   const openLive = (match) => {
     const inn = match.currentInnings;
 
-    if (inn?.inningsId) {
+    if (inn?.inningsId && match.isScorer) {
       navigation.navigate("QuickScoreFlow", {
         screen: "LiveScoringScreen",
         params: {
@@ -219,6 +228,7 @@ export default function MatchesTab() {
                 key={m._id}
                 match={m}
                 variant="live"
+                canScore={!!m.isScorer}
                 onPress={openLive}
               />
             ))}

@@ -14,8 +14,6 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
 
-import { updateMatchApi } from "../services/matches.services";
-
 import { COLORS } from "../../../constants/colors";
 
 /*
@@ -26,7 +24,11 @@ import { COLORS } from "../../../constants/colors";
 | Expects via route.params: matchId, teamA, teamB (with .squad already
 | set from SquadSelectionScreen).
 |
-| Persists tossWinner/tossDecision to the Match record, then forwards
+| NOTHING IS SAVED HERE - see SquadSelectionScreen for why. The toss
+| result travels forward in route params and is written by startMatch, in
+| the same call that checks the PIN.
+|
+| Previously persisted tossWinner/tossDecision to the Match record, then forwarded
 | the batting/bowling team split to the opening-pair/bowler screen.
 */
 
@@ -41,7 +43,6 @@ export default function TossScreen() {
   const [coinSide, setCoinSide] = useState(null);
   const [tossWinnerId, setTossWinnerId] = useState(null);
   const [electedTo, setElectedTo] = useState(null);
-  const [saving, setSaving] = useState(false);
 
   const teams = [teamA, teamB].filter(Boolean);
 
@@ -50,7 +51,7 @@ export default function TossScreen() {
     setCoinSide(result);
   };
 
-  const handleContinue = async () => {
+  const handleContinue = () => {
     if (!tossWinnerId) {
       Alert.alert("Please select the toss winner");
       return;
@@ -67,27 +68,23 @@ export default function TossScreen() {
     const battingTeam = electedTo === "Bat" ? tossWinnerTeam : tossLoserTeam;
     const bowlingTeam = electedTo === "Bat" ? tossLoserTeam : tossWinnerTeam;
 
-    try {
-      setSaving(true);
+    /*
+    | Everything the start needs, carried forward together: the two squads
+    | (already on battingTeam.squad / bowlingTeam.squad) and the toss.
+    | MatchLineUpScreen hands the lot to startMatch behind the PIN.
+    */
 
-      await updateMatchApi(matchId, {
-        tossWinner: tossWinnerId,
-        tossDecision: electedTo,
-      });
-
-      navigation.navigate("MatchLineUpScreen", {
-        matchId,
-        battingTeam,
-        bowlingTeam,
-      });
-    } catch (error) {
-      Alert.alert(
-        "Failed",
-        error.response?.data?.message || "Could not save the toss result.",
-      );
-    } finally {
-      setSaving(false);
-    }
+    navigation.navigate("MatchLineUpScreen", {
+      matchId,
+      battingTeam,
+      bowlingTeam,
+      teamAId: teamA?._id,
+      teamBId: teamB?._id,
+      teamASquad: (teamA?.squad || []).map((p) => p._id),
+      teamBSquad: (teamB?.squad || []).map((p) => p._id),
+      tossWinner: tossWinnerId,
+      tossDecision: electedTo,
+    });
   };
 
   return (
@@ -182,16 +179,9 @@ export default function TossScreen() {
         )}
       </ScrollView>
 
-      <TouchableOpacity
-        style={styles.continueButton}
-        onPress={handleContinue}
-        disabled={saving}
-      >
-        {saving ? (
-          <ActivityIndicator size="small" color={COLORS.onPrimary} />
-        ) : (
-          <Text style={styles.continueText}>Continue To Playing XI</Text>
-        )}
+      {/* Nothing is saved here any more, so there is nothing to wait on. */}
+      <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+        <Text style={styles.continueText}>Continue To Playing XI</Text>
       </TouchableOpacity>
     </View>
   );

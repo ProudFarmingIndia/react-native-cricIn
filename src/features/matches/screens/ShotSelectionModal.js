@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from "react-native";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
 
@@ -36,8 +42,23 @@ export default function ShotSelectionModal() {
 
   console.log("[ShotSelection] handleContinue", { shotType, runs, inningsId: safeInningsId });
 
+  /*
+  | This used to console.warn and return, which from the scorer's side meant
+  | the Continue button did nothing at all - no error, no sheet, no ball. It
+  | fired on every delivery after the first, because LiveScoringScreen had
+  | lost its matchId to a param replacement and was handing this sheet an
+  | undefined one. That cause is fixed on the other side; this stops the
+  | symptom from ever being silent again.
+  */
+
   if (!safeMatchId || !safeInningsId) {
-    console.warn("Missing match or innings", "Unable to continue because match or innings ID is missing.");
+    Alert.alert(
+      "Can't record this ball",
+      "This ball lost track of its match. Go back to the match and open Score again.",
+    );
+
+    navigation.goBack();
+
     return;
   }
 

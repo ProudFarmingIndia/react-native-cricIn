@@ -27,18 +27,35 @@ import { COLORS } from "../../../constants/colors";
 | Expects via route.params: matchId, battingTeam, bowlingTeam (each with
 | a .squad array of the selected Playing XI, from TossScreen).
 |
-| On Start Scoring: creates the first Innings with the chosen openers
-| and bowler already seated, then shows a 4-digit PIN modal. The PIN is
-| the opposing captain's approval — the scorer must enter the correct
-| PIN to go live. On success it marks the match live and hands off to
-| LiveScoringScreen.
+| NOTHING FROM THE SETUP HAS BEEN SAVED YET. Squad Selection and Toss
+| carry their choices forward in params rather than writing them, so this
+| screen holds the entire setup and hands it to startMatch with the PIN.
+|
+| On the correct PIN the server writes the squads, the toss and the live
+| status in one operation, and only then is the first Innings created with
+| the chosen openers. A wrong PIN writes nothing at all, so the opposing
+| captain starting later gets a genuinely clean slate.
 */
 
 export default function MatchLineupScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const { matchId, battingTeam, bowlingTeam } = route.params || {};
+  /*
+  | The setup arrives in params rather than from the Match record, because
+  | none of it has been saved yet - Squad Selection and Toss deliberately
+  | write nothing. It is handed to startMatch below, behind the PIN.
+  */
+
+  const {
+    matchId,
+    battingTeam,
+    bowlingTeam,
+    teamASquad = [],
+    teamBSquad = [],
+    tossWinner,
+    tossDecision,
+  } = route.params || {};
 
   const battingSquad = battingTeam?.squad || [];
   const bowlingSquad = bowlingTeam?.squad || [];
@@ -107,7 +124,33 @@ export default function MatchLineupScreen() {
     try {
       setStarting(true);
 
-      // 1) Create the innings FIRST with the chosen openers/bowler.
+      /*
+      | 1) THE PIN FIRST.
+      |
+      | This was the other way round, and the comment claimed it was
+      | deliberate. It is the wrong order: a mistyped PIN - the most common
+      | thing that happens on this screen - left a real innings behind in
+      | the database for a match that never started.
+      |
+      | Nothing is written until the opponent's PIN is accepted.
+      */
+
+      await startMatchApi(matchId, pin, {
+        teamASquad,
+        teamBSquad,
+        tossWinner,
+        tossDecision,
+      });
+
+      /*
+      | 2) Then the innings, with THIS captain's openers.
+      |
+      | Safe to call after: startMatch is idempotent for a match that is
+      | already live, and createInnings updates the openers on an innings
+      | that has not been bowled at yet rather than returning somebody
+      | else's abandoned lineup.
+      */
+
       const innings = await createInningsApi({
         matchId,
         battingTeam: battingTeam._id,
@@ -118,9 +161,6 @@ export default function MatchLineupScreen() {
         currentBowlerId: openingBowler._id,
       });
 
-      // 2) Only now validate the opponent's PIN and go live.
-      await startMatchApi(matchId, pin);
-
       setShowPinModal(false);
       navigation.replace("LiveScoringScreen", {
         matchId,
@@ -129,7 +169,16 @@ export default function MatchLineupScreen() {
         bowlingSquad,
       });
     } catch (error) {
-      setPinError(error.response?.data?.message || "Incorrect PIN. Try again.");
+      /*
+      | The server's message is the useful one - it names the team whose
+      | PIN was wrong, or says the innings could not be opened. "Incorrect
+      | PIN" is only the fallback.
+      */
+      setPinError(
+        error.response?.data?.message ||
+          error.message ||
+          "Could not start the match. Try again.",
+      );
     } finally {
       setStarting(false);
     }

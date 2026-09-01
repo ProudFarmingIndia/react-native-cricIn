@@ -136,6 +136,17 @@ export default function HomeScreen() {
     const inn = match.currentInnings;
 
     /*
+    | Only the scorer reaches the scoring pad. The opposing captain and
+    | anyone following either team open the match instead - the card they
+    | tapped says "VIEW MATCH", and this is what honours it.
+    */
+
+    if (!match.isScorer || !inn?.inningsId) {
+      openUpcomingMatch(match._id);
+      return;
+    }
+
+    /*
     | QuickScoreFlow moved from the Matches tab up to RootNavigator, so it
     | is addressed directly instead of through the tab. Going via the tab
     | is what pushed the flow onto the Matches stack and left "Matches"
@@ -277,6 +288,47 @@ export default function HomeScreen() {
                 const isTeamBBatting =
                   !!battingId && String(match.teamB?._id) === battingId;
 
+                /*
+                | THE SIDE BEING CHASED.
+                |
+                | In the second innings the team that batted first rendered
+                | nothing at all: not a score, not "Yet to bat" (correctly -
+                | they had batted), just an empty slot beside their name. So
+                | the card showed "Needs 342 more to win" with nothing on it
+                | to say where 342 came from, and the side defending a total
+                | looked like a side that had never been in.
+                |
+                | `firstInnings` comes from the server and is present for the
+                | whole match, not only during the innings break. Shown only
+                | once it is complete and only against the side that is NOT
+                | currently batting - during the first innings that same
+                | innings is already rendered live above, and printing it
+                | twice would be worse than not printing it at all.
+                */
+
+                const firstInn = match.firstInnings;
+
+                const firstBattingId = String(firstInn?.battingTeamId || "");
+
+                const pastInningsFor = (teamId, teamIsBatting) =>
+                  firstInn &&
+                  firstInn.isCompleted &&
+                  !teamIsBatting &&
+                  !!teamId &&
+                  String(teamId) === firstBattingId
+                    ? firstInn
+                    : null;
+
+                const teamAPastInnings = pastInningsFor(
+                  match.teamA?._id,
+                  isTeamABatting,
+                );
+
+                const teamBPastInnings = pastInningsFor(
+                  match.teamB?._id,
+                  isTeamBBatting,
+                );
+
                 return (
                   <TouchableOpacity
                     key={match._id}
@@ -330,11 +382,22 @@ export default function HomeScreen() {
                             {inn.overs} ov · RR {inn.runRate}
                           </Text>
                         </View>
+                      ) : teamAPastInnings ? (
+                        <View style={styles.sideScoreWrap}>
+                          <Text style={styles.sidePastScore}>
+                            {teamAPastInnings.runs}/{teamAPastInnings.wickets}
+                          </Text>
+
+                          <Text style={styles.sideOvers}>
+                            {teamAPastInnings.overs} ov
+                          </Text>
+                        </View>
                       ) : isTeamBBatting && inn?.inningsNumber === 1 ? (
                         /*
                         | Only meaningful in the first innings. In the
                         | second, the other side has already batted - they
-                        | are not "yet to bat", they are defending.
+                        | are not "yet to bat", they are defending, and the
+                        | branch above prints the total they are defending.
                         */
                         <Text style={styles.sideYetToBat}>Yet to bat</Text>
                       ) : null}
@@ -362,6 +425,16 @@ export default function HomeScreen() {
 
                           <Text style={styles.sideOvers}>
                             {inn.overs} ov · RR {inn.runRate}
+                          </Text>
+                        </View>
+                      ) : teamBPastInnings ? (
+                        <View style={styles.sideScoreWrap}>
+                          <Text style={styles.sidePastScore}>
+                            {teamBPastInnings.runs}/{teamBPastInnings.wickets}
+                          </Text>
+
+                          <Text style={styles.sideOvers}>
+                            {teamBPastInnings.overs} ov
                           </Text>
                         </View>
                       ) : isTeamABatting && inn?.inningsNumber === 1 ? (
@@ -397,9 +470,16 @@ export default function HomeScreen() {
                       </View>
                     )}
 
+                    {/*
+                    | Between innings there IS no active innings, so this
+                    | said "Waiting for the first ball" on a match that was
+                    | half over. The server already says which state it is.
+                    */}
                     {!inn && (
                       <Text style={styles.awaitingText}>
-                        Waiting for the first ball
+                        {match.awaitingSecondInnings
+                          ? "Innings break — second innings to come"
+                          : "Waiting for the first ball"}
                       </Text>
                     )}
 
@@ -409,8 +489,25 @@ export default function HomeScreen() {
                       </Text>
                     )}
 
-                    <View style={styles.primaryButton}>
-                      <Text style={styles.primaryButtonText}>SCORE NOW →</Text>
+                    {/*
+                    | Every live card used to show SCORE NOW, whoever was
+                    | looking. isScorer comes from the server and names the
+                    | one person actually recording this match.
+                    */}
+                    <View
+                      style={[
+                        styles.primaryButton,
+                        !match.isScorer && styles.secondaryButton,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.primaryButtonText,
+                          !match.isScorer && styles.secondaryButtonText,
+                        ]}
+                      >
+                        {match.isScorer ? "SCORE NOW →" : "VIEW MATCH →"}
+                      </Text>
                     </View>
                   </TouchableOpacity>
                 );
@@ -562,6 +659,52 @@ export default function HomeScreen() {
 
               const teamBWon = !!winnerId && String(match.teamB?._id) === winnerId;
 
+              /*
+              | THE SCORES.
+              |
+              | A finished card used to show two team names, a trophy beside
+              | the winner and a line of free text - "won by 6 wickets" - and
+              | no scores at all. The two totals are the first thing anyone
+              | looks for on a completed match, and they were the one thing
+              | missing.
+              |
+              | `inningsSummaries` carries every innings in order, so this
+              | reads the same way the live card does: each side's score
+              | against its own name.
+              |
+              | Matched by batting team rather than by innings number,
+              | because which side batted first is a matter of the toss and
+              | nothing here should assume it.
+              */
+
+              const summaries = match.inningsSummaries || [];
+
+              const summaryFor = (teamId) =>
+                summaries.find(
+                  (i) =>
+                    !!teamId && String(i.battingTeamId) === String(teamId),
+                ) || null;
+
+              const teamAInnings = summaryFor(match.teamA?._id);
+
+              const teamBInnings = summaryFor(match.teamB?._id);
+
+              const renderScore = (innings, won) =>
+                innings ? (
+                  <View style={styles.sideScoreWrap}>
+                    <Text
+                      style={[
+                        styles.recentScore,
+                        won && styles.recentScoreWinner,
+                      ]}
+                    >
+                      {innings.runs}/{innings.wickets}
+                    </Text>
+
+                    <Text style={styles.sideOvers}>{innings.overs} ov</Text>
+                  </View>
+                ) : null;
+
               return (
                 <TouchableOpacity
                   key={match._id}
@@ -605,6 +748,8 @@ export default function HomeScreen() {
                         color={COLORS.secondary}
                       />
                     )}
+
+                    {renderScore(teamAInnings, teamAWon)}
                   </View>
 
                   <View style={styles.sideRow}>
@@ -627,7 +772,31 @@ export default function HomeScreen() {
                         color={COLORS.secondary}
                       />
                     )}
+
+                    {renderScore(teamBInnings, teamBWon)}
                   </View>
+
+                  {/*
+                  | The award, when there is one. It is computed the moment
+                  | the match completes, so on a finished card it is almost
+                  | always there.
+                  */}
+                  {!!match.playerOfTheMatch?.playerName && (
+                    <View style={styles.recentPotmRow}>
+                      <MaterialIcons
+                        name="emoji-events"
+                        size={13}
+                        color={COLORS.secondary}
+                      />
+
+                      <Text style={styles.recentPotmText} numberOfLines={1}>
+                        {match.playerOfTheMatch.playerName}
+                        {match.playerOfTheMatchStats
+                          ? ` · ${match.playerOfTheMatchStats}`
+                          : ""}
+                      </Text>
+                    </View>
+                  )}
 
                   <Text style={styles.resultText} numberOfLines={2}>
                     {match.result ||
@@ -967,6 +1136,49 @@ const styles = StyleSheet.create({
     color: COLORS.onSurfaceVariant,
   },
 
+  /*
+  | A finished innings, printed at the same size as the live one so the two
+  | sides line up, but in the muted colour - the score being chased is
+  | context, and the score in progress is the news.
+  */
+
+  sidePastScore: {
+    fontSize: 19,
+    fontWeight: "700",
+    color: COLORS.onSurfaceVariant,
+  },
+
+  /*
+  | A finished score. Smaller than the live one - the match is over, so the
+  | number is a record rather than news - and the winner's is the darker of
+  | the two.
+  */
+
+  recentScore: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.onSurfaceVariant,
+  },
+
+  recentScoreWinner: {
+    fontWeight: "800",
+    color: COLORS.onSurface,
+  },
+
+  recentPotmRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+  },
+
+  recentPotmText: {
+    flex: 1,
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: COLORS.onSurfaceVariant,
+  },
+
   sideYetToBat: {
     fontSize: 11,
     fontStyle: "italic",
@@ -1153,10 +1365,21 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
 
+  // A watcher gets a quiet outline, not the filled call to action.
+  secondaryButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+  },
+
   primaryButtonText: {
     color: "#fff",
     fontWeight: "700",
     letterSpacing: 0.5,
+  },
+
+  secondaryButtonText: {
+    color: COLORS.onSurfaceVariant,
   },
 
   // ── Empty ─────────────────────────────────────────────────────────────

@@ -156,6 +156,50 @@ export const buildCommentaryLine = (ball, options = {}) => {
 
   const opener = `**${bowler}** to **${batter}**`;
 
+  /*
+  |------------------------------------------------------------------
+  | Things Nobody Bowled
+  |------------------------------------------------------------------
+  |
+  | A retirement and a penalty are not deliveries, so they must not read
+  | "X to Y" - there was no X and no Y. They are announcements, and these
+  | branches come FIRST because both can arrive carrying a wicketType or an
+  | extraType that the branches below would otherwise claim.
+  |
+  | A retired-hurt row in particular arrives with isWicket false, so without
+  | this it would fall all the way through to the plain runs sentence and
+  | read "no run" for a batter walking off injured.
+  */
+
+  const wicketKey = String(ball.wicketType || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+
+  if (wicketKey === "retiredhurt" || wicketKey === "retiredout" || wicketKey === "retired") {
+    const who = nameFrom(
+      ball,
+      ["dismissedPlayer", "dismissedPlayerName", "dismissedPlayerId"],
+      resolveBatsman,
+      "",
+    );
+
+    const name = who && who !== "Select Player" ? who : batter;
+
+    return wicketKey === "retiredout"
+      ? `**${name}** retired out.`
+      : `**${name}** retired hurt.`;
+  }
+
+  if (ball.extraType === "penalty") {
+    const awarded = Number(ball.teamRuns ?? ball.runs ?? 5);
+
+    const reason = String(ball.penaltyReason || "").trim();
+
+    return `**${awarded} penalty runs** to the batting side${
+      reason ? `, ${reason.toLowerCase()}` : ""
+    }.`;
+  }
+
   const shot = String(ball.shotType || "").trim();
 
   const region = String(

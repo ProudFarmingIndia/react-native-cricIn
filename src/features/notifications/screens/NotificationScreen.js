@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 
 import useNotification from "../hooks/useNotification";
 
@@ -15,7 +15,7 @@ import {
 
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useDispatch } from "react-redux";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 import NotificationCard from "../components/NotificationCard";
 import NotificationFilter from "../components/NotificationFilter";
@@ -142,9 +142,26 @@ export default function NotificationScreen() {
 
   const { acceptProposal, rejectProposal } = useViceCaptainProposal();
 
-  useEffect(() => {
-    getNotifications();
-  }, [getNotifications]);
+  /*
+  |--------------------------------------------------------------------------
+  | Refetch On Focus, Not Only On Mount
+  |--------------------------------------------------------------------------
+  |
+  | This was a plain mount effect, so the list was fetched once and then
+  | trusted for as long as the screen stayed alive. Coming back from the
+  | detail screen showed whatever the store happened to hold - which, if a
+  | mark-read write had failed, was a row still claiming to be unread with
+  | nothing anywhere saying why.
+  |
+  | Refetching on focus makes the server the tiebreaker: the optimistic
+  | update shows instantly, and the next focus confirms or corrects it.
+  */
+
+  useFocusEffect(
+    useCallback(() => {
+      getNotifications();
+    }, [getNotifications]),
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -441,7 +458,7 @@ export default function NotificationScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.screen}>
       {/* ------------------------------------------------------------ */}
       {/* Toolbar */}
       {/* ------------------------------------------------------------ */}
@@ -551,7 +568,7 @@ export default function NotificationScreen() {
         keyExtractor={(item) => item._id || item.id}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={styles.listContent}
         ListEmptyComponent={<NotificationEmpty />}
       />
     </SafeAreaView>

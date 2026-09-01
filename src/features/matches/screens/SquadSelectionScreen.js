@@ -1,19 +1,11 @@
 import React, { useMemo, useState } from "react";
 
-import {
-  View,
-  ScrollView,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
+import { View, ScrollView, StyleSheet, Alert } from "react-native";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
 
 import SquadTeamSection from "../../../components/matches/SquadSelectionScreen/SquadTeamSection";
 import SquadProgressBar from "../../../components/matches/SquadSelectionScreen/SquadProgressBar";
-
-import { updateMatchApi } from "../services/matches.services";
 
 import { COLORS } from "../../../constants/colors";
 
@@ -29,9 +21,17 @@ import { COLORS } from "../../../constants/colors";
 | are already set at the team level (team.captainId/viceCaptainId) and
 | aren't reselected per match.
 |
-| On continue: persists both Playing XIs to the Match record
-| (teamASquad/teamBSquad) so they survive an app restart, then forwards
-| the selected squads to TossScreen.
+| NOTHING IS SAVED HERE.
+|
+| This used to write both Playing XIs to the Match immediately. That meant
+| a captain who picked the squads and then mistyped the PIN two screens
+| later had still changed the match - and the opposing captain, coming to
+| set it up properly, was handed that abandoned selection with no sign of
+| where it came from.
+|
+| The squads travel forward in route params instead and are written by
+| startMatch, in the same call that checks the PIN. Either the match
+| starts with this setup or nothing was written at all.
 */
 
 export default function SquadSelectionScreen() {
@@ -46,8 +46,6 @@ export default function SquadSelectionScreen() {
 
   const [searchA, setSearchA] = useState("");
   const [searchB, setSearchB] = useState("");
-
-  const [saving, setSaving] = useState(false);
 
   const poolA = useMemo(
     () =>
@@ -82,33 +80,17 @@ export default function SquadSelectionScreen() {
     });
   };
 
-  const handleContinue = async () => {
+  const handleContinue = () => {
     if (selectedA.length !== 11 || selectedB.length !== 11) {
       Alert.alert("Both teams must have 11 players selected.");
       return;
     }
 
-    try {
-      setSaving(true);
-
-      await updateMatchApi(matchId, {
-        teamASquad: selectedA.map((p) => p._id),
-        teamBSquad: selectedB.map((p) => p._id),
-      });
-
-      navigation.navigate("TossScreen", {
-        matchId,
-        teamA: { ...teamA, squad: selectedA },
-        teamB: { ...teamB, squad: selectedB },
-      });
-    } catch (error) {
-      Alert.alert(
-        "Failed",
-        error.response?.data?.message || "Could not save the squads.",
-      );
-    } finally {
-      setSaving(false);
-    }
+    navigation.navigate("TossScreen", {
+      matchId,
+      teamA: { ...teamA, squad: selectedA },
+      teamB: { ...teamB, squad: selectedB },
+    });
   };
 
   return (
@@ -135,16 +117,10 @@ export default function SquadSelectionScreen() {
         />
       </ScrollView>
 
-      {saving ? (
-        <View style={styles.savingBar}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
-        </View>
-      ) : (
-        <SquadProgressBar
-          selectedCount={selectedA.length + selectedB.length}
-          onContinue={handleContinue}
-        />
-      )}
+      <SquadProgressBar
+        selectedCount={selectedA.length + selectedB.length}
+        onContinue={handleContinue}
+      />
     </View>
   );
 }
@@ -158,10 +134,5 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 160,
-  },
-
-  savingBar: {
-    padding: 16,
-    alignItems: "center",
   },
 });

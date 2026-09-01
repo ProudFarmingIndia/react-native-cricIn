@@ -91,18 +91,26 @@ export default function LiveScoringListScreen() {
     }, [load]),
   );
 
-  const canScore = (match) => {
-    const me = String(authUser?._id || "");
+  /*
+  | The server decides this now and sends it as `isScorer`.
+  |
+  | This used to accept the scorer OR the invite sender OR the match
+  | creator, which meant the captain who sent the challenge saw SCORE NOW
+  | on a match the other captain had started - and the other captain, who
+  | was actually scoring it, did not.
+  |
+  | The local fallback covers an older server build that does not send the
+  | flag; it deliberately checks only scorerUserId, matching the server.
+  */
 
-    if (!me) {
-      return false;
+  const canScore = (match) => {
+    if (typeof match.isScorer === "boolean") {
+      return match.isScorer;
     }
 
-    return (
-      String(match.scorerUserId || "") === me ||
-      String(match.inviteSenderUserId || "") === me ||
-      String(match.userId || "") === me
-    );
+    const me = String(authUser?._id || "");
+
+    return !!me && String(match.scorerUserId || "") === me;
   };
 
   const openMatch = (match) => {
