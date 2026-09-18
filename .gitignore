@@ -48,4 +48,5 @@ Thumbs.db
 
 # Temporary
 tmp/
-temp/
+temp/android/ 
+ios/ 
