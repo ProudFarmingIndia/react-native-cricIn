@@ -23,13 +23,18 @@ const EXTRAS = [
 | Scoring Pad
 |--------------------------------------------------------------------------
 |
-| onRun(runs) - a normal delivery, runs off the bat (0-6)
-| onWicket() - opens the wicket dismissal flow
-| onExtra(extraType) - wide/no-ball/bye/leg-bye, prompts for run count
+| onRun(runs)         a normal delivery, runs off the bat (0-6)
+| onWicket()          opens the wicket / retirement sheet
+| onExtra(extraType)  wide / no-ball / bye / leg-bye, prompts for run count
+| onPenalty()         five penalty runs to the batting side (Law 41)
+|
+| The penalty control sits apart from the extras row on purpose. A wide and
+| a bye are DELIVERIES; a penalty is not bowled at all, and putting it in
+| the same row would invite it being tapped as though it were.
 |
 */
 
-export default function ScoringPad({ onRun, onWicket, onExtra }) {
+export default function ScoringPad({ onRun, onWicket, onExtra, onPenalty }) {
   return (
     <View style={styles.container}>
       <View style={styles.grid}>
@@ -65,6 +70,16 @@ export default function ScoringPad({ onRun, onWicket, onExtra }) {
           </TouchableOpacity>
         ))}
       </View>
+
+      {!!onPenalty && (
+        <TouchableOpacity
+          style={styles.penaltyRow}
+          activeOpacity={0.75}
+          onPress={onPenalty}
+        >
+          <Text style={styles.penaltyText}>+5 PENALTY RUNS</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -136,5 +151,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: COLORS.secondary,
+  },
+
+  /*
+  | Deliberately understated - outlined rather than filled, and full width
+  | below the extras rather than beside them. It is a rare, deliberate act,
+  | and it should not compete for the thumb with the buttons used on every
+  | ball.
+  */
+
+  penaltyRow: {
+    marginTop: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: COLORS.outlineVariant,
+    alignItems: "center",
+  },
+
+  penaltyText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    color: COLORS.onSurfaceVariant,
   },
 });

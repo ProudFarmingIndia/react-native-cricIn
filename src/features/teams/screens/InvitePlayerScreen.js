@@ -145,9 +145,32 @@ export default function InvitePlayerScreen({
   |--------------------------------------------------------------------------
   */
 
+  /*
+  |--------------------------------------------------------------------------
+  | Add Local Player
+  |--------------------------------------------------------------------------
+  |
+  | The route is "AddLocalPlayerScreen" - that is the name it is
+  | registered under in TeamStackNavigator. This said "AddLocalPlayer",
+  | so the one button on the "no CricIn player found" empty state did
+  | nothing at all: React Navigation logs a warning to the console and
+  | swallows the tap, with no visible error.
+  |
+  | That is the worst possible place for it to break. A captain reaches
+  | this button precisely when the person they are adding is NOT on
+  | CricIn - which is most of a local team - and the dead button reads as
+  | "you cannot add them", not "this is broken".
+  |
+  | The params were already right: AddLocalPlayerScreen reads
+  | { teamId, mobile } and pre-fills the number when the search term was
+  | all digits, so somebody who typed a phone number does not type it
+  | twice.
+  |
+  */
+
   const addLocalPlayer = () => {
     navigation.navigate(
-      "AddLocalPlayer",
+      "AddLocalPlayerScreen",
       {
         teamId,
 

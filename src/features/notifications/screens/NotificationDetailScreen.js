@@ -13,7 +13,10 @@ import {
 } from "react-native";
 
 import { useRoute, useNavigation } from "@react-navigation/native";
+import { useDispatch, useSelector } from "react-redux";
 import Ionicons from "@expo/vector-icons/Ionicons";
+
+import { markNotificationAsRead } from "../store/notificationSlice";
 
 import { getTeamByIdApi } from "../../teams/services/team.service";
 import { getChallengeByIdApi } from "../../matchChallenges/services/matchChallenges.services";
@@ -51,7 +54,56 @@ export default function NotificationDetailScreen() {
   const route = useRoute();
   const navigation = useNavigation();
 
-  const { notification, onAccept, onReject } = route.params || {};
+  const { notification: paramNotification, onAccept, onReject } =
+    route.params || {};
+
+  const dispatch = useDispatch();
+
+  /*
+  |--------------------------------------------------------------------------
+  | The Live Row, Not The Frozen One
+  |--------------------------------------------------------------------------
+  |
+  | The route param is a snapshot taken at the moment the row was tapped. It
+  | never updates - so after this screen (or anything else) marks the
+  | notification read, the copy rendered HERE still says unread, and so does
+  | the copy the user goes back to if the store row was never touched.
+  |
+  | Preferring the store row means one source of truth: the list, this screen
+  | and the header badge all read the same object. The param is the fallback
+  | for a notification the list has not loaded - a push deep link, for
+  | instance.
+  */
+
+  const storedNotification = useSelector((state) =>
+    state.notifications?.notifications?.find(
+      (n) => n._id === paramNotification?._id,
+    ),
+  );
+
+  const notification = storedNotification || paramNotification;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Opening It Reads It
+  |--------------------------------------------------------------------------
+  |
+  | This used to depend entirely on NotificationScreen's handlePress firing
+  | markAsRead before navigating. That is one caller, and it is the wrong
+  | place for the rule: any other route to this screen - a push deep link,
+  | a notification opened from somewhere else later - left the notification
+  | unread even though the user had plainly just read it.
+  |
+  | Doing it here makes "opened" and "read" the same event, wherever the open
+  | came from. The write is idempotent server-side, so the double dispatch
+  | with handlePress is harmless.
+  */
+
+  useEffect(() => {
+    if (notification?._id && !notification.isRead) {
+      dispatch(markNotificationAsRead(notification._id));
+    }
+  }, [dispatch, notification?._id, notification?.isRead]);
 
   const [subject, setSubject] = useState(null);
   const [loading, setLoading] = useState(true);

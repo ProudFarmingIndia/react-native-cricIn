@@ -106,8 +106,7 @@ export default function TeamDetailsScreen() {
   |
   */
 
-  const myUserId =
-    authUser?._id || myPlayer?.userId?._id || myPlayer?.userId;
+  const myUserId = authUser?._id || myPlayer?.userId?._id || myPlayer?.userId;
 
   const myPlayerId = myPlayer?._id;
 
@@ -144,9 +143,15 @@ export default function TeamDetailsScreen() {
 
   useEffect(() => {
     if (Number.isInteger(initialTab)) {
+      // If the requested tab is Settings but the user can't access it,
+      // fall back to Overview instead of stranding them on a hidden tab.
+      if (initialTab === SETTINGS_TAB && !canAccessSettings) {
+        setActiveTab(0);
+        return;
+      }
       setActiveTab(initialTab);
     }
-  }, [initialTab]);
+  }, [initialTab, canAccessSettings]);
 
   /*
   |--------------------------------------------------------------------------
@@ -157,10 +162,7 @@ export default function TeamDetailsScreen() {
   if (loading || !currentTeam) {
     return (
       <SafeAreaView style={styles.loaderContainer}>
-        <ActivityIndicator
-          size="large"
-          color={COLORS.primary}
-        />
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </SafeAreaView>
     );
   }
@@ -176,13 +178,11 @@ export default function TeamDetailsScreen() {
   |
   */
 
-  const ownerId =
-    currentTeam?.userId?._id || currentTeam?.userId;
+  const ownerId = currentTeam?.userId?._id || currentTeam?.userId;
 
   const isOwner = String(ownerId) === String(myUserId);
 
-  const isCaptain =
-    String(currentTeam?.captainId?._id) === String(myPlayerId);
+  const isCaptain = String(currentTeam?.captainId?._id) === String(myPlayerId);
 
   const isViceCaptain =
     String(currentTeam?.viceCaptainId?._id) === String(myPlayerId);
@@ -218,6 +218,9 @@ export default function TeamDetailsScreen() {
 
   const canSendInvitations =
     isLeader || (isViceCaptain && !!vcRights.canSendInvitations);
+
+  const canAccessSettings =
+    canEditTeam || canManagePlayers || canSendInvitations;
 
   /*
   |--------------------------------------------------------------------------
@@ -413,6 +416,7 @@ export default function TeamDetailsScreen() {
         <TeamTabBar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          showSettingsTab={canAccessSettings}
         />
 
         {activeTab === 0 && (
@@ -432,15 +436,11 @@ export default function TeamDetailsScreen() {
           />
         )}
 
-        {activeTab === 2 && (
-          <TeamMatchesTab team={currentTeam} />
-        )}
+        {activeTab === 2 && <TeamMatchesTab team={currentTeam} />}
 
-        {activeTab === 3 && (
-          <TeamStatisticsTab team={currentTeam} />
-        )}
+        {activeTab === 3 && <TeamStatisticsTab team={currentTeam} />}
 
-        {activeTab === 4 && (
+        {activeTab === 4 && canAccessSettings && (
           <TeamSettingsTab
             team={currentTeam}
             canEdit={canEditTeam}

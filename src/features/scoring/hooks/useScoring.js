@@ -65,8 +65,10 @@ export default function useScoring() {
   );
 
   const chooseNextBatsman = useCallback(
-    async (inningsId, playerId) => {
-      const result = await dispatch(setNextBatsman({ inningsId, playerId }));
+    async (inningsId, playerId, end) => {
+      const result = await dispatch(
+        setNextBatsman({ inningsId, playerId, end }),
+      );
       if (setNextBatsman.fulfilled.match(result)) {
         return { success: true, data: result.payload };
       }

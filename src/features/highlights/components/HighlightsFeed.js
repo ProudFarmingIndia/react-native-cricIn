@@ -24,6 +24,57 @@ import { COLORS } from "../../../constants/colors";
 
 /*
 |--------------------------------------------------------------------------
+| A List Key That Cannot Collide
+|--------------------------------------------------------------------------
+|
+| The feed used `String(item.id || index)`, which trusts the server to send
+| unique ids. It did not: a highlight id was built as
+| `TYPE-matchId-playerId`, and this feed emits one row per six and per
+| wicket - so a bowler with three wickets in a match produced three rows all
+| called WICKET-<matchId>-<bowlerId>, and React reported, once per pair:
+|
+|     Encountered two children with the same key, WICKET-6a95b10e...
+|
+| That is not cosmetic. React matches children by key across renders, so
+| rows sharing one can be duplicated or dropped, and per-row state can end
+| up attached to the wrong row.
+|
+| The server now composes ids from the innings and the ball as well, which
+| fixes the cause. This fixes the CLASS: keys are stamped on once, here, as
+| the data enters state, and a repeat gets a suffix. The list can no longer
+| be broken by a payload - an older server build, a new moment type, a bug
+| nobody has written yet.
+|
+| Stamped at load rather than computed inside the key expression on purpose.
+| A key has to be stable for the life of a row, and one derived from
+| position during render changes whenever the list is reordered.
+*/
+
+const withStableKeys = (list) => {
+  const used = new Set();
+
+  return list.map((item, index) => {
+    const base =
+      item?.id !== undefined && item?.id !== null && item?.id !== ""
+        ? String(item.id)
+        : `highlight-${index}`;
+
+    let key = base;
+    let suffix = 1;
+
+    while (used.has(key)) {
+      key = `${base}#${suffix}`;
+      suffix += 1;
+    }
+
+    used.add(key);
+
+    return { ...item, __key: key };
+  });
+};
+
+/*
+|--------------------------------------------------------------------------
 | Highlights Feed
 |--------------------------------------------------------------------------
 |
@@ -95,7 +146,7 @@ export default function HighlightsFeed({
               limit: limit || 10,
             });
 
-        setItems(Array.isArray(data) ? data : []);
+        setItems(withStableKeys(Array.isArray(data) ? data : []));
       } catch (e) {
         setError(
           e.response?.data?.message ||
@@ -221,7 +272,7 @@ export default function HighlightsFeed({
             ? renderEmpty()
             : items.map((item, index) => (
                 <HighlightCard
-                  key={String(item.id || index)}
+                  key={item.__key}
                   item={item}
                   onPress={onPressItem}
                   showMatch={false}
@@ -231,7 +282,7 @@ export default function HighlightsFeed({
       ) : (
         <FlatList
           data={items}
-          keyExtractor={(item, index) => String(item.id || index)}
+          keyExtractor={(item, index) => item.__key || String(index)}
           renderItem={({ item }) => (
             <HighlightCard
               item={item}

@@ -51,7 +51,25 @@ const formatTime = (value) => {
   });
 };
 
-export default function MatchCard({ match, variant = "upcoming", onPress }) {
+/*
+| canScore decides the live card's action.
+|
+| It used to have no gate at all: EVERY live card rendered "SCORE NOW",
+| for every viewer. The opposing captain, and anyone following either
+| team, saw an invitation to score a match somebody else was already
+| scoring - and tapping it opened the scoring pad, where the server then
+| rejected the first ball.
+|
+| The server sends `isScorer` on every match now, so the caller passes it
+| straight through rather than re-deriving it from three id fields.
+*/
+
+export default function MatchCard({
+  match,
+  variant = "upcoming",
+  canScore = false,
+  onPress,
+}) {
   const inn = match?.currentInnings;
 
   const battingId = String(inn?.battingTeamId || "");
@@ -211,8 +229,15 @@ export default function MatchCard({ match, variant = "upcoming", onPress }) {
       )}
 
       {variant === "live" && (
-        <View style={styles.action}>
-          <Text style={styles.actionText}>SCORE NOW →</Text>
+        <View style={[styles.action, !canScore && styles.actionSecondary]}>
+          <Text
+            style={[
+              styles.actionText,
+              !canScore && styles.actionTextSecondary,
+            ]}
+          >
+            {canScore ? "SCORE NOW →" : "VIEW MATCH →"}
+          </Text>
         </View>
       )}
     </TouchableOpacity>
@@ -397,10 +422,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
 
+  // A watcher gets a quiet outline, not the filled call to action.
+  actionSecondary: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+  },
+
   actionText: {
     fontSize: 13,
     fontWeight: "800",
     letterSpacing: 0.5,
     color: COLORS.onPrimary,
+  },
+
+  actionTextSecondary: {
+    color: COLORS.onSurfaceVariant,
   },
 });

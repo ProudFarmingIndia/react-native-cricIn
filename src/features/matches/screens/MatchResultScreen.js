@@ -14,7 +14,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import {
   getMatchByIdApi,
   getMatchSummaryApi,
-  updateMatchResultApi,
+  completeMatchApi,
 } from "../services/matches.services";
 
 import { COLORS } from "../../../constants/colors";
@@ -51,6 +51,9 @@ export default function MatchResultScreen() {
   const [innings, setInnings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [resultText, setResultText] = useState("");
+
+  // Shown when the result could not be saved - see the load effect.
+  const [resultError, setResultError] = useState(null);
 
   /*
    * FIX: store which team batted in which innings so the render can
@@ -116,45 +119,79 @@ export default function MatchResultScreen() {
 
         /*
         |----------------------------------------------------------------------
-        | Determine Winner And Result String
+        | The Result Comes From The Server
         |----------------------------------------------------------------------
+        |
+        | This screen used to work the result out itself and write it back,
+        | and that arrangement had four separate holes:
+        |
+        |   A TIE WAS NEVER SAVED. The write was guarded on having a winner,
+        |   so a tied match printed "Match tied" and stayed `live` forever -
+        |   never reaching Recent, never leaving the live feed.
+        |
+        |   THE MARGIN ASSUMED ELEVEN A SIDE. `10 - wickets` reported the
+        |   wrong margin in any smaller match, and that text was fanned out
+        |   to every follower.
+        |
+        |   A TRANSFERRED SCORER COULD NOT SAVE IT. updateMatchResult
+        |   authorises on captaincy, but scoring can be handed to any squad
+        |   player - their write came back 400 and the catch only logged it,
+        |   so the screen showed a result that had not been recorded.
+        |
+        |   CLOSING THE APP ON THE WINNING RUN LOST IT, because this screen
+        |   was the only writer and had not been reached.
+        |
+        | The server now finalises the match when the second innings ends
+        | (finalizeMatchFromInnings), so this screen reads what was recorded
+        | instead of deciding it.
         */
 
-        let winnerTeamId;
-        let margin;
-
-        if (secondInnings.runs > firstInnings.runs) {
-          // Chasing team won
-          winnerTeamId = resolvedSecondTeam._id;
-          const wicketsInHand = 10 - secondInnings.wickets;
-          margin = `${resolvedSecondTeam.teamName} won by ${wicketsInHand} wicket${wicketsInHand !== 1 ? "s" : ""}`;
-        } else if (firstInnings.runs > secondInnings.runs) {
-          // First-batting team won
-          winnerTeamId = resolvedFirstTeam._id;
-          const runMargin = firstInnings.runs - secondInnings.runs;
-          margin = `${resolvedFirstTeam.teamName} won by ${runMargin} run${runMargin !== 1 ? "s" : ""}`;
-        } else {
-          margin = "Match tied";
+        if (matchData.result) {
+          setResultText(matchData.result);
+          setLoading(false);
+          return;
         }
 
-        setResultText(margin);
-
         /*
-        |----------------------------------------------------------------------
-        | Persist Result
-        | Skipped if match is already completed (e.g. user revisits screen)
-        | to avoid hitting the backend's must-be-live guard unnecessarily.
-        |----------------------------------------------------------------------
+        | No stored result: an older match, or the finalise call failed.
+        | Ask the server to complete it, then show what it decided - rather
+        | than printing a verdict of our own that nothing has saved.
         */
 
-        if (winnerTeamId && matchData.status !== "completed") {
-          await updateMatchResultApi(matchId, {
-            winnerTeam: winnerTeamId,
-            result: margin,
-          });
+        try {
+          const completed = await completeMatchApi(matchId);
+
+          setResultText(
+            completed?.result ||
+              (secondInnings.runs === firstInnings.runs
+                ? "Match tied"
+                : "Result recorded"),
+          );
+        } catch (completionError) {
+          /*
+          | Surfaced, not swallowed. The scorer needs to know the result is
+          | not saved - previously this failed silently behind a result that
+          | looked official.
+          */
+          setResultError(
+            completionError.response?.data?.message ||
+              "The result could not be saved. Reopen this match to try again.",
+          );
+
+          setResultText(
+            secondInnings.runs === firstInnings.runs
+              ? "Match tied"
+              : secondInnings.runs > firstInnings.runs
+                ? `${resolvedSecondTeam?.teamName || "The chasing side"} won`
+                : `${resolvedFirstTeam?.teamName || "The defending side"} won`,
+          );
         }
       } catch (error) {
         console.error("Failed to load match result:", error);
+
+        setResultError(
+          error.response?.data?.message || "Could not load the match result.",
+        );
       } finally {
         setLoading(false);
       }
@@ -179,7 +216,13 @@ export default function MatchResultScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.conclusionCard}>
           <Text style={styles.conclusionLabel}>MATCH CONCLUSION</Text>
-          <Text style={styles.conclusionText}>{resultText || "Loading result…"}</Text>
+          <Text style={styles.conclusionText}>
+            {resultText || "Loading result…"}
+          </Text>
+
+          {!!resultError && (
+            <Text style={styles.resultErrorText}>{resultError}</Text>
+          )}
         </View>
 
         <View style={styles.card}>
@@ -218,22 +261,87 @@ export default function MatchResultScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
+        {/*
+        |------------------------------------------------------------------
+        | View Scorecard -> MatchDetailsScreen, on its Scorecard tab
+        |------------------------------------------------------------------
+        |
+        | This used to open ScorecardScreen, a standalone screen showing one
+        | innings and nothing else - no bowling figures alongside it, no
+        | fall of wickets, no over-by-over, no way to reach the other
+        | innings, and no Player of the Match.
+        |
+        | MatchDetailsScreen is where the real scorecard lives: six tabs
+        | over the same match, both innings, and the award card at the top
+        | of Live. It already accepts `initialTab`, so it opens directly on
+        | the scorecard rather than on Info.
+        |
+        | This is the same route LiveScoringScreen's header uses for its own
+        | scorecard link, so the scorer and a spectator now land on exactly
+        | the same screen from both places.
+        */}
+
         <TouchableOpacity
           style={styles.secondaryButton}
           onPress={() =>
-            navigation.navigate("ScorecardScreen", { matchId })
+            navigation.navigate("MatchDetailsScreen", {
+              matchId,
+              initialTab: "Scorecard",
+            })
           }
         >
           <Text style={styles.secondaryButtonText}>View Scorecard</Text>
         </TouchableOpacity>
 
+        {/*
+        |------------------------------------------------------------------
+        | Back To Matches -> the Matches tab, on its own list screen
+        |------------------------------------------------------------------
+        |
+        | This used to open MatchCenterScreen, which pushed ANOTHER screen
+        | on top of the scoring flow. The match is finished at this point -
+        | the scorer wants out of the flow, not deeper into it. Every screen
+        | behind this one (the pad, the innings summaries, the toss) was
+        | still sitting in the stack underneath, and none of them is safe to
+        | return to once the match is complete.
+        |
+        | WHY THE NESTED SHAPE, AND NOT navigate("MatchesScreen")
+        |
+        | "MatchesScreen" is registered in MatchesStackNavigator, which is
+        | the Matches TAB of MainNavigator, which is the "MainTabs" route of
+        | RootNavigator. This screen lives in QuickScoreStackNavigator - a
+        | sibling root route ("QuickScoreFlow"). A navigator only resolves
+        | route names it can see, so a bare
+        | navigation.navigate("MatchesScreen") throws
+        | "not handled by any navigator" - the name is not in this stack, nor
+        | in the root stack above it.
+        |
+        | Naming each level walks down to it: MainTabs -> Matches tab ->
+        | MatchesScreen.
+        |
+        | (Note that "MatchListScreen" is the FUNCTION name exported from
+        | features/matches/screens/MatchesScreen.js, not a route name.
+        | Navigation resolves the name given to <Stack.Screen>, which is
+        | "MatchesScreen".)
+        |
+        | WHY THIS ALSO CLOSES THE FLOW
+        |
+        | MainTabs sits BELOW QuickScoreFlow in the root stack, so navigating
+        | to it pops the whole scoring flow rather than pushing over it. The
+        | finished match is left behind properly, and the back gesture from
+        | the Matches list can no longer walk back into a dead scoring pad.
+        */}
+
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={() =>
-            navigation.navigate("MatchCenterScreen", { matchId })
+            navigation.navigate("MainTabs", {
+              screen: "Matches",
+              params: { screen: "MatchesScreen" },
+            })
           }
         >
-          <Text style={styles.primaryButtonText}>Go To Match Center</Text>
+          <Text style={styles.primaryButtonText}>Back To Matches</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -278,6 +386,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.onPrimary,
     marginTop: 8,
+  },
+
+  resultErrorText: {
+    marginTop: 10,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: COLORS.error,
+    textAlign: "center",
   },
 
   card: {

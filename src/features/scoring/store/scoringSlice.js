@@ -18,6 +18,9 @@ const initialState = {
   // Just the delivery round trip - see ballPending below.
   ballLoading: false,
 
+  // The innings id of the most recent scorecard request - see its reducer.
+  lastRequestedInningsId: null,
+
   error: null,
   success: false,
 };
@@ -76,9 +79,9 @@ export const addBall = createAsyncThunk(
 
 export const setNextBatsman = createAsyncThunk(
   "scoring/setNextBatsman",
-  async ({ inningsId, playerId }, thunkAPI) => {
+  async ({ inningsId, playerId, end }, thunkAPI) => {
     try {
-      return await setNextBatsmanApi(inningsId, playerId);
+      return await setNextBatsmanApi(inningsId, playerId, end);
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || error.message,
@@ -181,7 +184,10 @@ const scoringSlice = createSlice({
       .addCase(setNextBatsman.pending, pendingReducer)
       .addCase(setNextBowler.pending, pendingReducer)
       .addCase(undoLastBall.pending, pendingReducer)
-      .addCase(getInningsScorecard.pending, pendingReducer)
+      .addCase(getInningsScorecard.pending, (state, action) => {
+        pendingReducer(state);
+        state.lastRequestedInningsId = action.meta.arg;
+      })
 
       .addCase(createInnings.rejected, rejectedReducer)
       .addCase(getInningsById.rejected, rejectedReducer)
@@ -210,6 +216,19 @@ const scoringSlice = createSlice({
         state.loading = false;
         state.success = true;
         state.currentInnings = action.payload;
+
+        /*
+        | The ball list belongs to the innings that just ended.
+        |
+        | It used to survive into the next one: SecondInningsScreen replaces
+        | straight into the scoring pad, so before the chase's own fetch
+        | landed the screen painted the FIRST innings' score, commentary and
+        | batter figures - and strikerId() returned a first-innings batter,
+        | so the first tap of the chase posted that player against the
+        | second innings. If the refetch then failed, that state was
+        | permanent.
+        */
+        state.balls = [];
       })
       .addCase(addBall.fulfilled, (state, action) => {
         state.loading = false;
@@ -266,7 +285,25 @@ const scoringSlice = createSlice({
       .addCase(getInningsScorecard.fulfilled, (state, action) => {
         state.loading = false;
         state.success = true;
-        state.currentInnings = action.payload?.innings || action.payload;
+
+        const innings = action.payload?.innings || action.payload;
+
+        /*
+        | Guard against a late response for the PREVIOUS innings landing
+        | after the next one has loaded. Without it a slow first-innings
+        | fetch can overwrite the chase that is already on screen.
+        */
+        const incomingId = String(innings?._id || "");
+        const heldId = String(state.currentInnings?._id || "");
+
+        if (heldId && incomingId && heldId !== incomingId && state.balls.length) {
+          // A different innings is already loaded and has data - keep it.
+          if (String(state.lastRequestedInningsId || "") !== incomingId) {
+            return;
+          }
+        }
+
+        state.currentInnings = innings;
         state.balls = action.payload?.balls || [];
       });
   },

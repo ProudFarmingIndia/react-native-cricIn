@@ -33,11 +33,23 @@ export const deleteMatchApi = async (matchId) => {
 
 // ── Match Lifecycle ───────────────────────────────────────────────────────
 
-export const startMatchApi = async (matchId, pin) => {
-  const response = await apiClient.put(
-    withId(ENDPOINTS.MATCH.START, matchId),
-    { pin },
-  );
+/*
+| Starting a match now carries the whole setup with it.
+|
+| `setup` holds both playing XIs and the toss. The server writes them in
+| the same operation that validates the PIN and takes the match live, so a
+| wrong PIN leaves nothing behind - see startMatch in match.service.ts.
+|
+| `pins` is the neutral-scorer case: somebody who manages neither team
+| supplies one PIN from each captain.
+*/
+
+export const startMatchApi = async (matchId, pin, setup, pins) => {
+  const response = await apiClient.put(withId(ENDPOINTS.MATCH.START, matchId), {
+    pin,
+    pins,
+    setup,
+  });
   return unwrap(response);
 };
 

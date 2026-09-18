@@ -23,6 +23,18 @@ import { COLORS } from "../../../constants/colors";
 | Both default to true so the create-team flow, where the creator is
 | always owner and captain, is unaffected.
 |
+| THE SECOND CARD IS BACK
+|
+| "Add Player Manually" was commented out, which left a captain with only
+| one option: invite somebody who is already on CricIn. At a ground that is
+| almost nobody - the whole squad is standing there and none of them have
+| the app. There was no way to build a team out of the people actually
+| present.
+|
+| It now creates a real CricIn account behind the player, so the person can
+| log in with that number later and find their profile, their squad and
+| their match history already waiting.
+|
 */
 
 export default function AddPlayerOptions({
@@ -80,44 +92,27 @@ export default function AddPlayerOptions({
 
       {/* Add Local Player */}
 
-      {/* {canAddLocal && (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        style={styles.card}
-        onPress={onAddLocalPlayer}
-      >
-        <View
-          style={[
-            styles.iconContainer,
-            // {
-            //   backgroundColor: "#F2F4F5",
-            // },
-          ]}
+      {canAddLocal && (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={styles.card}
+          onPress={onAddLocalPlayer}
         >
-          <Ionicons
-            name="person"
-            size={24}
-            color="#777"
-          />
-        </View>
+          <View style={styles.iconContainer}>
+            <Ionicons name="person-add-outline" size={24} color="#777" />
+          </View>
 
-        <View style={styles.content}>
-          <Text style={styles.title}>
-            Add Local Player
-          </Text>
+          <View style={styles.content}>
+            <Text style={styles.title}>Add Player Manually</Text>
 
-          <Text style={styles.subtitle}>
-            Manually enter player details
-          </Text>
-        </View>
+            <Text style={styles.subtitle}>
+              Not on CricIn yet? Add their name and number
+            </Text>
+          </View>
 
-        <Ionicons
-          name="chevron-forward"
-          size={22}
-          color="#A0A0A0"
-        />
-      </TouchableOpacity>
-      )} */}
+          <Ionicons name="chevron-forward" size={22} color="#A0A0A0" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

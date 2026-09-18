@@ -24,6 +24,16 @@ import { COLORS } from "../../../constants/colors";
 | Names are tappable and open the player's profile, matching every other
 | player list in the app.
 |
+| EACH BATTER HAS A CHANGE CONTROL TOO
+|
+| Same affordance as the bowler's, on the row it changes. What it OFFERS
+| depends on whether that batter has faced a ball, and the caller decides
+| that - this component just reports which end was tapped:
+|
+|   0 balls faced -> the scorer tapped the wrong player. A correction.
+|   Balls faced   -> the runs belong to somebody. Only a retirement can
+|                    take them off strike, and that is a scorecard entry.
+|
 */
 
 const Row = ({ name, figures, isStriker, onPress, trailing }) => (
@@ -46,11 +56,30 @@ const Row = ({ name, figures, isStriker, onPress, trailing }) => (
   </View>
 );
 
+/* Shared by all three rows so the batter control is pixel-identical to
+   the bowler's - it is the same affordance and must not look like a
+   different kind of button. */
+const ChangeButton = ({ onPress, label }) => (
+  <TouchableOpacity
+    style={styles.changeButton}
+    onPress={onPress}
+    accessibilityLabel={label}
+    accessibilityRole="button"
+    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+  >
+    <Ionicons name="swap-horizontal" size={14} color={COLORS.primary} />
+
+    <Text style={styles.changeText}>Change</Text>
+  </TouchableOpacity>
+);
+
 export default function PlayerStats({
   striker,
   nonStriker,
   bowler,
   onChangeBowler,
+  /* Called with "striker" | "nonStriker". */
+  onChangeBatsman,
   onPressPlayer,
 }) {
   const battingLine = (p) => {
@@ -75,6 +104,14 @@ export default function PlayerStats({
         figures={battingLine(striker)}
         isStriker
         onPress={striker?.id ? () => onPressPlayer?.(striker.id) : undefined}
+        trailing={
+          onChangeBatsman ? (
+            <ChangeButton
+              label="Change striker"
+              onPress={() => onChangeBatsman("striker")}
+            />
+          ) : null
+        }
       />
 
       <Row
@@ -82,6 +119,14 @@ export default function PlayerStats({
         figures={battingLine(nonStriker)}
         onPress={
           nonStriker?.id ? () => onPressPlayer?.(nonStriker.id) : undefined
+        }
+        trailing={
+          onChangeBatsman ? (
+            <ChangeButton
+              label="Change non-striker"
+              onPress={() => onChangeBatsman("nonStriker")}
+            />
+          ) : null
         }
       />
 
@@ -98,16 +143,7 @@ export default function PlayerStats({
         onPress={bowler?.id ? () => onPressPlayer?.(bowler.id) : undefined}
         trailing={
           onChangeBowler ? (
-            <TouchableOpacity
-              style={styles.changeButton}
-              onPress={onChangeBowler}
-              accessibilityLabel="Change bowler"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="swap-horizontal" size={14} color={COLORS.primary} />
-
-              <Text style={styles.changeText}>Change</Text>
-            </TouchableOpacity>
+            <ChangeButton label="Change bowler" onPress={onChangeBowler} />
           ) : null
         }
       />

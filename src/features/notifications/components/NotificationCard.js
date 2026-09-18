@@ -323,6 +323,207 @@ export default function NotificationCard({
           background: "#FFDAD6",
         };
 
+      /*
+      |--------------------------------------------------------------------------
+      | Live Streaming
+      |--------------------------------------------------------------------------
+      |
+      | The invite is the only actionable one here, so it gets the amber
+      | of every other "you need to answer this" notification in the app -
+      | the same colour as a vice-captain proposal. The rest are news and
+      | stay muted.
+      |
+      | A stream going live gets a camera in red rather than the radio
+      | icon used for scoring going live, because the two land in the same
+      | list on the same match and must not look identical.
+      |
+      */
+
+      case NOTIFICATION_TYPES.BROADCAST_INVITE_RECEIVED:
+        return {
+          library: Ionicons,
+          name: "videocam",
+          color: "#8F4E00",
+          background: "#FFEDD5",
+        };
+
+      case NOTIFICATION_TYPES.BROADCAST_INVITE_ACCEPTED:
+        return {
+          library: Ionicons,
+          name: "checkmark-circle",
+          color: "#16A34A",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.BROADCAST_INVITE_DECLINED:
+      case NOTIFICATION_TYPES.BROADCAST_INVITE_REVOKED:
+        return {
+          library: Ionicons,
+          name: "videocam-off",
+          color: "#6B7280",
+          background: "#F3F4F6",
+        };
+
+      case NOTIFICATION_TYPES.FOLLOWED_STREAM_LIVE:
+        return {
+          library: Ionicons,
+          name: "videocam",
+          color: "#BA1A1A",
+          background: "#FFDAD6",
+        };
+
+      case NOTIFICATION_TYPES.RECORDING_EXPIRING:
+        return {
+          library: Ionicons,
+          name: "time",
+          color: "#8F4E00",
+          background: "#FFEDD5",
+        };
+
+      /*
+      |--------------------------------------------------------------------------
+      | Tournament
+      |--------------------------------------------------------------------------
+      |
+      | Two colours, split by whether the person has to do something.
+      |
+      | Amber - answer needed: the invite to a captain, the join request to
+      | an organizer. Same amber as every other "you need to answer this"
+      | in the app, so an unread list reads at a glance.
+      |
+      | Green - news: fixtures are out, a scorer was appointed, an invite
+      | was answered. Muted grey for the ones that take something away,
+      | red for a cancelled tournament, which is the only bad news here.
+      |
+      */
+
+      case NOTIFICATION_TYPES.TOURNAMENT_INVITE_RECEIVED:
+      case NOTIFICATION_TYPES.TOURNAMENT_JOIN_REQUEST:
+        return {
+          library: Ionicons,
+          name: "medal",
+          color: "#8F4E00",
+          background: "#FFEDD5",
+        };
+
+      case NOTIFICATION_TYPES.TOURNAMENT_INVITE_ACCEPTED:
+        return {
+          library: Ionicons,
+          name: "checkmark-circle",
+          color: "#16A34A",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.TOURNAMENT_INVITE_DECLINED:
+      case NOTIFICATION_TYPES.TOURNAMENT_SCORER_REVOKED:
+        return {
+          library: Ionicons,
+          name: "close-circle",
+          color: "#6B7280",
+          background: "#F3F4F6",
+        };
+
+      case NOTIFICATION_TYPES.TOURNAMENT_FIXTURES_READY:
+        return {
+          library: Ionicons,
+          name: "calendar",
+          color: "#0d631b",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.TOURNAMENT_MATCH_REMINDER:
+        return {
+          library: Ionicons,
+          name: "alarm",
+          color: "#0d631b",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.TOURNAMENT_SCORER_ASSIGNED:
+        return {
+          library: Ionicons,
+          name: "create",
+          color: "#0d631b",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.TOURNAMENT_CANCELLED:
+        return {
+          library: Ionicons,
+          name: "alert-circle",
+          color: "#BA1A1A",
+          background: "#FFDAD6",
+        };
+
+      /*
+      |--------------------------------------------------------------------------
+      | Series
+      |--------------------------------------------------------------------------
+      |
+      | Same amber-for-action, green-for-news split as the tournament
+      | block above. The icon differs on purpose: a series is two teams
+      | facing each other, so it gets the compare arrows rather than the
+      | medal - the two land in the same list and must not look identical.
+      |
+      */
+
+      case NOTIFICATION_TYPES.SERIES_INVITE_RECEIVED:
+        return {
+          library: Ionicons,
+          name: "git-compare",
+          color: "#8F4E00",
+          background: "#FFEDD5",
+        };
+
+      case NOTIFICATION_TYPES.SERIES_INVITE_ACCEPTED:
+        return {
+          library: Ionicons,
+          name: "checkmark-circle",
+          color: "#16A34A",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.SERIES_INVITE_DECLINED:
+      case NOTIFICATION_TYPES.SERIES_SCORER_REVOKED:
+        return {
+          library: Ionicons,
+          name: "close-circle",
+          color: "#6B7280",
+          background: "#F3F4F6",
+        };
+
+      case NOTIFICATION_TYPES.SERIES_FIXTURES_READY:
+        return {
+          library: Ionicons,
+          name: "calendar",
+          color: "#0d631b",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.SERIES_MATCH_REMINDER:
+        return {
+          library: Ionicons,
+          name: "alarm",
+          color: "#0d631b",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.SERIES_SCORER_ASSIGNED:
+        return {
+          library: Ionicons,
+          name: "create",
+          color: "#0d631b",
+          background: "#DCFCE7",
+        };
+
+      case NOTIFICATION_TYPES.SERIES_CANCELLED:
+        return {
+          library: Ionicons,
+          name: "alert-circle",
+          color: "#BA1A1A",
+          background: "#FFDAD6",
+        };
+
       case NOTIFICATION_TYPES.FOLLOWED_MATCH_RESULT:
         return {
           library: FontAwesome5,
@@ -407,6 +608,32 @@ export default function NotificationCard({
     NOTIFICATION_TYPES.VICE_CAPTAIN_PROPOSED,
     NOTIFICATION_TYPES.MATCH_CHALLENGE_RECEIVED,
     NOTIFICATION_TYPES.MATCH_CONFIRMATION_REQUIRED,
+
+    /*
+    | The camera invite. NotificationScreen has had accept and reject
+    | handlers for it since live streaming shipped, but the type was never
+    | added here - so the handlers were unreachable and the only way to
+    | answer was to tap through to the invite screen. Exactly the failure
+    | the note above describes.
+    */
+    NOTIFICATION_TYPES.BROADCAST_INVITE_RECEIVED,
+
+    /*
+    | Tournament invite to a captain, and a team's join request to the
+    | organizer. Both answerable in place: the organizer is chasing eight
+    | captains and cannot generate fixtures until they all answer, so
+    | every tap saved is real.
+    */
+    NOTIFICATION_TYPES.TOURNAMENT_INVITE_RECEIVED,
+    NOTIFICATION_TYPES.TOURNAMENT_JOIN_REQUEST,
+
+    /*
+    | The series challenge to an opponent captain. It is the only decision
+    | anybody other than the organizer makes in a whole series, and the
+    | organizer cannot generate a single fixture until it is answered - so
+    | answering it in place is worth the two buttons.
+    */
+    NOTIFICATION_TYPES.SERIES_INVITE_RECEIVED,
   ];
 
   const isInvitation = ACTIONABLE_TYPES.includes(type) && !selecting;

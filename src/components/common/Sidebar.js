@@ -72,6 +72,43 @@ const MENU_ITEMS = [
       }),
   },
   /*
+  | Live Now and Upcoming both open the Matches tab with a category
+  | pre-selected. They are shortcuts into the screen the bottom bar
+  | already reaches, which is fine - the bar lands on "All" and these
+  | land on the one list you asked for, which on a busy account is the
+  | difference between scrolling and not.
+  |
+  | initialTab is validated by MatchesScreen and initialCategory by
+  | MatchesTab, so a stale value here falls back to the default rather
+  | than rendering an empty screen.
+  */
+  {
+    key: "liveNow",
+    label: "Live Now",
+    icon: "flash-outline",
+    navigate: () =>
+      navigateFromRoot("MainTabs", {
+        screen: "Matches",
+        params: {
+          screen: "MatchesScreen",
+          params: { initialTab: "Matches", initialCategory: "live" },
+        },
+      }),
+  },
+  {
+    key: "upcomingMatches",
+    label: "Upcoming Matches",
+    icon: "calendar-outline",
+    navigate: () =>
+      navigateFromRoot("MainTabs", {
+        screen: "Matches",
+        params: {
+          screen: "MatchesScreen",
+          params: { initialTab: "Matches", initialCategory: "upcoming" },
+        },
+      }),
+  },
+  /*
   | A dedicated screen listing the matches in progress that this user can
   | score. It previously opened the Matches tab - the same destination as
   | the bottom bar - so the item did nothing the bar did not already do.
@@ -81,6 +118,78 @@ const MENU_ITEMS = [
     label: "Live Scoring",
     icon: "radio-outline",
     navigate: () => navigateFromRoot("LiveScoringListScreen"),
+  },
+  /*
+  | Live Streaming is its own item, NOT a mode of Live Scoring.
+  |
+  | They are two different jobs done by two different people: scoring is
+  | the captain recording every ball, streaming is somebody holding a
+  | phone. Merging them into one entry would put a camera operator - who
+  | is often in neither squad - behind a screen called "Live Scoring".
+  |
+  | The screen it opens does double duty on purpose: every match currently
+  | being streamed, and above them, any match THIS user has been asked to
+  | film. That second list is the only way an invited outsider can find
+  | their match at all - every other feed in the app filters by team
+  | membership.
+  */
+  {
+    key: "liveStreaming",
+    label: "Live Streaming",
+    icon: "videocam-outline",
+    navigate: () => navigateFromRoot("LiveStreamingListScreen"),
+  },
+  /*
+  | Tournaments get two entries rather than one.
+  |
+  | Browsing and organizing are done by different people at different
+  | moments: almost everyone opening this menu wants to look at a
+  | tournament, and a much smaller number want to start one. Behind a
+  | single "Tournaments" item the create button is one screen further away
+  | for the organizer and invisible to everyone else, which is the wrong
+  | trade in both directions.
+  |
+  | "Create Tournament" is deliberately open to everyone today. The
+  | subscription gate lives in exactly one place on the server
+  | (canCreateTournament), so when it turns on, this item starts refusing
+  | with a real message instead of quietly disappearing - which is what a
+  | user needs in order to know a subscription exists.
+  */
+  {
+    key: "tournaments",
+    /* medal, not trophy - "Challenges" below already owns the trophy. */
+    label: "Tournaments",
+    icon: "medal-outline",
+    navigate: () => navigateFromRoot("TournamentListScreen"),
+  },
+  {
+    key: "createTournament",
+    label: "Create Tournament",
+    icon: "add-circle-outline",
+    navigate: () => navigateFromRoot("CreateTournamentScreen"),
+  },
+  /*
+  | Series sits next to Tournaments and gets the same two-entry treatment,
+  | for the same reason: browsing and organizing are done by different
+  | people at different moments.
+  |
+  | They are separate items rather than one "Competitions" entry because
+  | they are separate things a user chooses between deliberately. A
+  | tournament is "many teams, one winner"; a series is "us against them,
+  | over N games". Somebody who wants to challenge one rival should not
+  | have to go through a screen about tournaments to do it.
+  */
+  {
+    key: "series",
+    label: "Series",
+    icon: "git-compare-outline",
+    navigate: () => navigateFromRoot("SeriesListScreen"),
+  },
+  {
+    key: "createSeries",
+    label: "Create Series",
+    icon: "add-circle-outline",
+    navigate: () => navigateFromRoot("CreateSeriesScreen"),
   },
   {
     key: "createTeam",

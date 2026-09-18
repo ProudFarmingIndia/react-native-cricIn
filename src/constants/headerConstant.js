@@ -300,4 +300,173 @@ export const HEADER_CONFIG = {
     showNotification: true,
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | Live Streaming
+  |--------------------------------------------------------------------------
+  |
+  | Every one of these needs an entry. NavigationHeader falls back to {}
+  | for an unknown route, which renders a blank bar with no title AND no
+  | back button - on screens you can only reach by navigating into them.
+  | That is the single most common way a new screen ends up feeling like a
+  | dead end.
+  |
+  | WatchLiveScreen is deliberately absent: it is registered with
+  | headerShown: false because it draws its own black video stage, and a
+  | light-green app bar above that looks like a bug.
+  |
+  */
+
+  LiveStreamingListScreen: {
+    title: "Live Streaming",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+    showSearch: true,
+    showNotification: true,
+  },
+
+  GoLiveScreen: {
+    title: "Cameras",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  AssignBroadcasterScreen: {
+    title: "Assign Camera",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  BroadcastInviteScreen: {
+    title: "Camera Invite",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  BroadcastSetupScreen: {
+    title: "Start Broadcasting",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Tournaments
+  |--------------------------------------------------------------------------
+  |
+  | A screen missing from this map gets a header with no title and - the
+  | part that actually breaks things - no back button, because showBack
+  | defaults to false. On Android the hardware button still works, so it
+  | reads as a design choice rather than a bug; on iOS it is a dead end.
+  |
+  | So every tournament route registered in RootNavigator has an entry
+  | here, including the ones that are only reached from one place.
+  |
+  */
+
+  TournamentListScreen: {
+    title: "Tournaments",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+    showSearch: true,
+    showNotification: true,
+  },
+
+  CreateTournamentScreen: {
+    title: "Create Tournament",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  /*
+  | No title of its own - the screen draws the tournament's name in its
+  | own hero, and repeating it in the bar wastes the only line a long
+  | tournament name has to fit into.
+  */
+
+  TournamentDetailScreen: {
+    title: "Tournament",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+    showNotification: true,
+  },
+
+  ManageTournamentScreen: {
+    title: "Manage Tournament",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  InviteTeamsScreen: {
+    title: "Invite Teams",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  TournamentInviteScreen: {
+    title: "Tournament Invite",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  TournamentSquadScreen: {
+    title: "Register Squad",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Series
+  |--------------------------------------------------------------------------
+  |
+  | Same rule as the tournament block above: a screen missing from this
+  | map gets a header with no title and no back button, which on iOS is a
+  | dead end. Every series route registered in RootNavigator has an entry.
+  |
+  */
+
+  SeriesListScreen: {
+    title: "Series",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+    showSearch: true,
+    showNotification: true,
+  },
+
+  CreateSeriesScreen: {
+    title: "Create Series",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  SeriesDetailScreen: {
+    title: "Series",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+    showNotification: true,
+  },
+
+  ManageSeriesScreen: {
+    title: "Manage Series",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
 };

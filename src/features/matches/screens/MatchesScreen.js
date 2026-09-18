@@ -4,12 +4,27 @@ import { useRoute } from "@react-navigation/native";
 import MatchesTopTabs from "../../../components/matches/MatchesTopTabs";
 import MatchesTab from "../../../components/tabs/MatchesTab";
 import TournamentTab from "../../../components/tabs/TournamentTab";
+import SeriesTab from "../../../components/tabs/SeriesTab";
 import TeamsTab from "../../../components/tabs/TeamsTab";
 import StatsTab from "../../../components/tabs/StatsTab";
 import HighlightsTab from "../../../components/tabs/HighlightsTab";
 import { COLORS } from "../../../constants/colors";
 
-const TAB_NAMES = ["Matches", "Tournaments", "Teams", "Stats", "Highlights"];
+/*
+| Series sits next to Tournaments because they are siblings - two ways of
+| organising cricket that a user chooses between - and before Teams
+| because both are about what is happening now, which is what people open
+| this screen for.
+*/
+
+const TAB_NAMES = [
+  "Matches",
+  "Tournaments",
+  "Series",
+  "Teams",
+  "Stats",
+  "Highlights",
+];
 
 export default function MatchListScreen() {
   const route = useRoute();
@@ -34,6 +49,9 @@ export default function MatchListScreen() {
 
       case "Tournaments":
         return <TournamentTab />;
+
+      case "Series":
+        return <SeriesTab />;
 
       case "Teams":
         return <TeamsTab />;

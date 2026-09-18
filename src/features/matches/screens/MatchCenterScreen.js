@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 
 import {
   SafeAreaView,
-  View,
   ScrollView,
   TouchableOpacity,
   Text,
@@ -18,7 +17,6 @@ import PartnershipTab from "../../../components/matches/MatchCenterScreen/Partne
 import ComingSoonTab from "../../../components/matches/MatchCenterScreen/ComingSoonTab";
 
 import { getMatchByIdApi, getMatchSummaryApi } from "../services/matches.services";
-import { getInningsScorecardApi } from "../../scoring/services/scoring.service";
 
 import { COLORS } from "../../../constants/colors";
 

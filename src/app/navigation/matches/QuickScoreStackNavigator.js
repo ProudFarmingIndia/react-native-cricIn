@@ -93,15 +93,18 @@ export default function QuickScoreStackNavigator() {
         component={MatchDetailsScreen}
       />
 
-      {/* 6 */}
+      {/*
+      | 6 - THE SCORING PAD
+      |
+      | Not swipeable. The stack under a chase is
+      | [LiveScoring(1st), InningsSummary, LiveScoring(2nd)], so one stray
+      | back-swipe mid-chase landed on the first innings' summary - whose
+      | own effect then loaded the FIRST innings over the chase in Redux.
+      */}
       <Stack.Screen
         name="LiveScoringScreen"
         component={LiveScoringScreen}
-        // options={{
-        //   gestureEnabled: false,
-
-        //   header: () => <AppHeader title="CricIn Live" showBack={false} />,
-        // }}
+        options={{ gestureEnabled: false }}
       />
 
       {/*
@@ -146,7 +149,12 @@ export default function QuickScoreStackNavigator() {
       />
 
       {/* 10 */}
+      {/*
+      | The match is over here. Swiping back reached a scoring pad that
+      | still looked live and whose every tap failed with a raw error.
+      */}
       <Stack.Screen
+        options={{ gestureEnabled: false, headerLeft: () => null }}
         name="MatchResultScreen"
         component={MatchResultScreen}
         // options={{

@@ -5,171 +5,182 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
-  Image,
+  TextInput,
   Alert,
 } from "react-native";
 
-import * as ImagePicker from "expo-image-picker";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
 import PrimaryButton from "../../../components/Button/PrimaryButton";
-import {
-  InputField,
-  SelectField,
-} from "../../../components/common/FormComponents";
+import LocationPicker from "../../../components/common/LocationPicker";
+import DatePickerField from "../../../components/common/DatePickerField";
+import { SelectField } from "../../../components/common/FormComponents";
+
+import { COLORS } from "../../../constants/colors";
+import { validateNational, findCountry } from "../../../constants/countries";
 
 import playerTypes from "../../../constants/dropdowns/playerTypes";
+import genders from "../../../constants/dropdowns/genders";
 import battingStyles from "../../../constants/dropdowns/battingStyles";
 import bowlingStyles from "../../../constants/dropdowns/bowlingStyles";
-import { COLORS } from "../../../constants/colors";
 
 import useTeam from "../hooks/useTeam";
 
+/*
+|--------------------------------------------------------------------------
+| Add Local Player
+|--------------------------------------------------------------------------
+|
+| A captain adds somebody who is not on CricIn yet. Three things are
+| required - name, mobile, player type - and everything else can wait.
+|
+| WHY PLAYER TYPE IS REQUIRED AND THE REST IS NOT
+|
+| Not a UX preference: `playerType` is `required: true` on the Player
+| schema with a fixed enum. Leaving it out produced a raw Mongoose
+| ValidationError on save - which is exactly the "it asked me for player
+| type" failure. It is now on the form AND validated on the server with a
+| readable message instead of a stack trace.
+|
+| The mobile is required for a different reason: it IS the identity. The
+| server creates a real User account alongside the Player, keyed on this
+| number, so when that person logs in they land in this profile rather than
+| a fresh empty one. A player row with no number can never be reached by
+| the human it describes.
+|
+| Everything else - gender, date of birth, location, batting and bowling
+| style, jersey number - is optional on purpose. The captain is on a field
+| with eleven people waiting.
+|
+| A NOTE ON THE FIELDS THAT USED TO BE HERE
+|
+| An earlier version sent `age`, `countryCode` and a `profileImage` string.
+| The schema has `dob`, no countryCode, and profileImage as
+| { url, publicId } - so Mongoose dropped all three silently in strict
+| mode. The captain picked a photo, saw "Success", and nothing was stored.
+| The fields below are the ones the schema really has, in the shape it
+| really wants.
+*/
+
 export default function AddLocalPlayerScreen({ navigation, route }) {
-  /*
-  |--------------------------------------------------------------------------
-  | Route
-  |--------------------------------------------------------------------------
-  */
-
-  const { teamId, mobile: initialMobile = "" } = route.params;
-
-  /*
-  |--------------------------------------------------------------------------
-  | Hook
-  |--------------------------------------------------------------------------
-  */
+  const { teamId, mobile: initialMobile = "" } = route.params || {};
 
   const { createLocalPlayer, loading } = useTeam();
 
-  /*
-  |--------------------------------------------------------------------------
-  | State
-  |--------------------------------------------------------------------------
-  */
+  /* ── Required ──────────────────────────────────────────────────── */
 
-  const [player, setPlayer] = useState({
+  const [playerName, setPlayerName] = useState("");
+  const [mobile, setMobile] = useState(initialMobile);
+  const [playerType, setPlayerType] = useState("");
+
+  /* ── Optional ──────────────────────────────────────────────────── */
+
+  const [gender, setGender] = useState("");
+  const [dob, setDob] = useState("");
+  const [location, setLocation] = useState({
+    country: "IN",
+    state: "",
+    city: "",
+  });
+  const [battingStyle, setBattingStyle] = useState("");
+  const [bowlingStyle, setBowlingStyle] = useState("");
+  const [jerseyNumber, setJerseyNumber] = useState("");
+
+  const [errors, setErrors] = useState({
     playerName: "",
-
-    mobile: initialMobile,
-
-    role: "",
-
-    battingStyle: "",
-
-    bowlingStyle: "",
-
-    jerseyNumber: "",
-
-    age: "",
-
-    profileImage: null,
+    mobile: "",
+    playerType: "",
   });
 
-  /*
-  |--------------------------------------------------------------------------
-  | Update Field
-  |--------------------------------------------------------------------------
-  */
+  const country = findCountry("IN");
 
-  const updateField = (key, value) => {
-    setPlayer((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
+  const nameOk = playerName.trim().length >= 2;
 
   /*
-  |--------------------------------------------------------------------------
-  | Pick Image
-  |--------------------------------------------------------------------------
+  | validateNational returns a STRING - the message, or "" when the number
+  | is fine. Not an { valid, message } object; reading `.valid` on a string
+  | is undefined, which would make every number look valid.
   */
+  const mobileMessage = validateNational(mobile, country);
 
-  const pickImage = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  const mobileOk = !mobileMessage;
 
-    if (!permission.granted) {
-      Alert.alert("Permission Required", "Please allow gallery access.");
+  const typeOk = !!playerType;
+
+  const canSubmit = nameOk && mobileOk && typeOk && !loading;
+
+  const clearError = (field) =>
+    setErrors((previous) =>
+      previous[field] ? { ...previous, [field]: "" } : previous,
+    );
+
+  const save = async () => {
+    const next = {
+      playerName: nameOk ? "" : "Enter the player's name.",
+      mobile: mobileMessage,
+      playerType: typeOk ? "" : "Choose a player type.",
+    };
+
+    setErrors(next);
+
+    if (next.playerName || next.mobile || next.playerType) return;
+
+    const result = await createLocalPlayer(teamId, {
+      /* Required. */
+      playerName: playerName.trim(),
+      mobile: mobile.trim(),
+      playerType,
+
+      /*
+      | Optional. Sent even when empty so the server's `|| null` / `|| ""`
+      | defaults normalise in ONE place - gender in particular must become
+      | null and not "", because "" is not in its enum and fails validation
+      | on every save.
+      */
+      gender,
+      dob,
+      country: location.country,
+      state: location.state,
+      city: location.city,
+      battingStyle,
+      bowlingStyle,
+      jerseyNumber,
+    });
+
+    /*
+    | useTeam's createLocalPlayer returns { success, data } / { success,
+    | error }. Testing `result.meta.requestStatus` - the shape of a RAW
+    | dispatch - was always undefined, so the success branch never ran and
+    | every successful add reported a failure.
+    */
+    if (result?.success) {
+      /*
+      | goBack ONCE, inside the callback. Calling it in the callback AND
+      | immediately after popped the screen before the message could be
+      | read, and on a fast tap went back two screens.
+      */
+      Alert.alert(
+        "Player Added",
+        `${playerName.trim()} is now in the squad. They can log in with this number to complete their profile.`,
+        [{ text: "OK", onPress: () => navigation.goBack() }],
+      );
+
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+    const message =
+      result?.error?.message ||
+      result?.error ||
+      "Unable to add the player. Please try again.";
 
-    if (result.canceled) return;
+    /* "Already on CricIn" is about the number - show it under that field. */
+    if (/already/i.test(String(message))) {
+      setErrors((previous) => ({ ...previous, mobile: String(message) }));
 
-    updateField("profileImage", result.assets[0].uri);
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Validation
-  |--------------------------------------------------------------------------
-  */
-
-  const validate = () => {
-    if (!player.playerName.trim()) {
-      Alert.alert("Validation", "Please enter player name.");
-      return false;
+      return;
     }
 
-    if (player.mobile && player.mobile.length !== 10) {
-      Alert.alert("Validation", "Please enter valid mobile number.");
-      return false;
-    }
-
-    if (!player.role) {
-      Alert.alert("Validation", "Please select player role.");
-      return false;
-    }
-
-    return true;
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Create Player
-  |--------------------------------------------------------------------------
-  */
-
-  const savePlayer = async () => {
-    if (!validate()) return;
-
-    const result = await createLocalPlayer(teamId, {
-      playerName: player.playerName.trim(),
-
-      mobile: player.mobile.trim(),
-
-      playerType: player.playerType,
-
-      battingStyle: player.battingStyle,
-
-      bowlingStyle: player.bowlingStyle,
-
-      jerseyNumber: player.jerseyNumber ? Number(player.jerseyNumber) : null,
-
-      age: player.age ? Number(player.age) : null,
-
-      profileImage: player.profileImage,
-    });
-
-    if (result?.meta?.requestStatus === "fulfilled") {
-      Alert.alert("Success", "Local player added successfully.", [
-        {
-          text: "OK",
-          onPress: () => navigation.goBack(),
-        },
-      ]);
-
-      navigation.goBack();
-    } else {
-      Alert.alert("Failed", result?.payload || "Unable to create player.");
-    }
+    Alert.alert("Could Not Add Player", String(message));
   };
 
   return (
@@ -177,100 +188,199 @@ export default function AddLocalPlayerScreen({ navigation, route }) {
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
-        <Text style={styles.heading}>Add Local Player</Text>
+        <Text style={styles.heading}>Add Player</Text>
 
         <Text style={styles.subtitle}>
-          Create a player who isn't registered on CricIn yet.
+          Name, number and player type are all we need. We'll create their
+          CricIn account so they can log in and finish their profile.
         </Text>
       </View>
 
-      <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-        {player.profileImage ? (
-          <Image
-            source={{
-              uri: player.profileImage,
-            }}
-            style={styles.image}
-          />
-        ) : (
-          <>
-            <Ionicons name="camera-outline" size={42} color={COLORS.primary} />
+      {/* ── Required ─────────────────────────────────────────────── */}
 
-            <Text style={styles.imageText}>Add Player Photo</Text>
-          </>
+      <Text style={styles.sectionTitle}>Required</Text>
+
+      <View style={styles.field}>
+        <Text style={styles.label}>
+          Player Name<Text style={styles.required}> *</Text>
+        </Text>
+
+        <TextInput
+          placeholder="Rohit Sharma"
+          placeholderTextColor="#9CA3AF"
+          value={playerName}
+          onChangeText={(text) => {
+            setPlayerName(text);
+            clearError("playerName");
+          }}
+          style={[styles.input, !!errors.playerName && styles.inputError]}
+          maxLength={50}
+          autoCapitalize="words"
+        />
+
+        {!!errors.playerName && (
+          <Text style={styles.error} accessibilityLiveRegion="polite">
+            {errors.playerName}
+          </Text>
         )}
-      </TouchableOpacity>
+      </View>
 
-      <InputField
-        label="Player Name"
-        placeholder="Player Name"
-        value={player.playerName}
-        onChangeText={(text) => updateField("playerName", text)}
-      />
+      <View style={styles.field}>
+        <Text style={styles.label}>
+          Mobile Number<Text style={styles.required}> *</Text>
+        </Text>
 
-      <InputField
-        label="Mobile Number"
-        placeholder="Mobile Number"
-        keyboardType="number-pad"
-        maxLength={10}
-        editable={!initialMobile}
-        value={player.mobile}
-        onChangeText={(text) =>
-          updateField("mobile", text.replace(/[^0-9]/g, ""))
-        }
-      />
+        <View style={[styles.phoneRow, !!errors.mobile && styles.inputError]}>
+          <Text style={styles.dial}>{country.dialCode}</Text>
+
+          <TextInput
+            placeholder="9876543210"
+            placeholderTextColor="#9CA3AF"
+            keyboardType="number-pad"
+            /*
+            | maxLength, not a check inside onChangeText. Setting state to a
+            | value it already holds skips the re-render, so the native
+            | input keeps the rejected character on screen.
+            */
+            maxLength={country.nationalLength}
+            editable={!initialMobile}
+            value={mobile}
+            onChangeText={(text) => {
+              setMobile(text.replace(/\D/g, ""));
+              clearError("mobile");
+            }}
+            style={styles.phoneInput}
+          />
+        </View>
+
+        {errors.mobile ? (
+          <Text style={styles.error} accessibilityLiveRegion="polite">
+            {errors.mobile}
+          </Text>
+        ) : (
+          <Text style={styles.helper}>
+            This is how they'll log in and claim this profile.
+          </Text>
+        )}
+      </View>
+
+      {/*
+        | SelectField draws its own border and takes no style prop, so the
+        | error state is a ring drawn around it rather than passed into it.
+      */}
+      <View style={!!errors.playerType ? styles.selectError : null}>
+        <SelectField
+          label="Player Type *"
+          value={playerType}
+          options={playerTypes}
+          placeholder="Select player type"
+          onSelect={(value) => {
+            setPlayerType(value);
+            clearError("playerType");
+          }}
+        />
+      </View>
+
+      {!!errors.playerType && (
+        <Text
+          style={[styles.error, styles.selectErrorText]}
+          accessibilityLiveRegion="polite"
+        >
+          {errors.playerType}
+        </Text>
+      )}
+
+      {/* ── Optional ─────────────────────────────────────────────── */}
+
+      <View style={styles.optionalHeader}>
+        <Text style={styles.sectionTitle}>Optional</Text>
+
+        <Text style={styles.sectionNote}>The player can add these later</Text>
+      </View>
 
       <SelectField
-        label="Player Type"
-        value={player.role}
-        options={playerTypes}
-        placeholder="Select Player Type"
-        onSelect={(value) => updateField("playerType", value)}
+        label="Gender"
+        value={gender}
+        options={genders}
+        placeholder="Select gender"
+        onSelect={setGender}
       />
+
+      <DatePickerField label="Date of Birth" value={dob} onChange={setDob} />
+
+      <LocationPicker value={location} onChange={setLocation} />
 
       <SelectField
         label="Batting Style"
-        value={player.battingStyle}
+        value={battingStyle}
         options={battingStyles}
-        placeholder="Select Batting Style"
-        onSelect={(value) => updateField("battingStyle", value)}
+        placeholder="Select batting style"
+        onSelect={setBattingStyle}
       />
 
       <SelectField
         label="Bowling Style"
-        value={player.bowlingStyle}
+        value={bowlingStyle}
         options={bowlingStyles}
-        placeholder="Select Bowling Style"
-        onSelect={(value) => updateField("bowlingStyle", value)}
+        placeholder="Select bowling style"
+        onSelect={setBowlingStyle}
       />
 
-      <InputField
-        label="Jersey Number"
-        placeholder="Jersey Number"
-        keyboardType="number-pad"
-        value={player.jerseyNumber}
-        onChangeText={(text) =>
-          updateField("jerseyNumber", text.replace(/[^0-9]/g, ""))
-        }
-      />
+      <View style={styles.field}>
+        <Text style={styles.label}>Jersey Number</Text>
 
-      <InputField
-        label="Age"
-        placeholder="Age"
-        keyboardType="number-pad"
-        value={player.age}
-        onChangeText={(text) => updateField("age", text.replace(/[^0-9]/g, ""))}
-      />
+        <TextInput
+          placeholder="7"
+          placeholderTextColor="#9CA3AF"
+          keyboardType="number-pad"
+          maxLength={3}
+          value={jerseyNumber}
+          onChangeText={(text) => setJerseyNumber(text.replace(/\D/g, ""))}
+          style={styles.input}
+        />
+      </View>
+
+      <View style={styles.notice}>
+        <Ionicons
+          name="information-circle-outline"
+          size={20}
+          color={COLORS.primary}
+        />
+
+        <Text style={styles.noticeText}>
+          A CricIn account is created for this number. They can log in any
+          time to complete their profile and see their stats.
+        </Text>
+      </View>
 
       <View style={styles.mgT}>
         <PrimaryButton
-          title={loading ? "Creating Player..." : "Create Local Player"}
+          title={loading ? "Adding Player..." : "Add To Squad"}
           loading={loading}
-          disabled={loading}
-          onPress={savePlayer}
+          disabled={!canSubmit}
+          onPress={save}
         />
+
+        {/*
+          | A disabled button with no explanation is the most frustrating
+          | thing a form can do. This names what is still missing.
+        */}
+        {!canSubmit && !loading && (
+          <Text style={styles.blockedHint}>
+            Still needed:{" "}
+            {[
+              !nameOk && "player name",
+              !mobileOk && "mobile number",
+              !typeOk && "player type",
+            ]
+              .filter(Boolean)
+              .join(", ")}
+            .
+          </Text>
+        )}
       </View>
     </ScrollView>
   );
@@ -284,52 +394,156 @@ const styles = StyleSheet.create({
 
   content: {
     padding: 20,
-    paddingBottom: 50,
+    paddingBottom: 60,
+  },
+
+  header: {
+    marginBottom: 24,
   },
 
   heading: {
     fontSize: 24,
     fontWeight: "700",
     color: COLORS.primary,
-    marginBottom: 24,
-  },
-
-  imagePicker: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignSelf: "center",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#DDD",
-    marginBottom: 30,
-    overflow: "hidden",
-  },
-
-  image: {
-    width: "100%",
-    height: "100%",
-  },
-
-  imageText: {
-    marginTop: 8,
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.primary,
-    textAlign: "center",
-  },
-  mgT: {
-    marginTop: 20,
-  },
-  header: {
-    marginBottom: 25,
   },
 
   subtitle: {
-    marginTop: 6,
+    marginTop: 8,
     color: "#666",
     fontSize: 14,
     lineHeight: 20,
+  },
+
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: COLORS.onSurfaceVariant,
+    marginBottom: 14,
+  },
+
+  optionalHeader: {
+    marginTop: 22,
+    paddingTop: 22,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.outlineVariant,
+  },
+
+  sectionNote: {
+    marginTop: -8,
+    marginBottom: 16,
+    fontSize: 12,
+    color: "#9CA3AF",
+  },
+
+  field: {
+    marginBottom: 18,
+  },
+
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+  },
+
+  required: {
+    color: COLORS.error,
+  },
+
+  input: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: "#111827",
+    backgroundColor: "#FFFFFF",
+  },
+
+  phoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 52,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    backgroundColor: "#FFFFFF",
+  },
+
+  dial: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+    marginRight: 10,
+  },
+
+  phoneInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#111827",
+  },
+
+  inputError: {
+    borderColor: COLORS.error,
+    backgroundColor: COLORS.errorContainer,
+  },
+
+  selectError: {
+    borderWidth: 1,
+    borderColor: COLORS.error,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    backgroundColor: COLORS.errorContainer,
+  },
+
+  selectErrorText: {
+    marginTop: -8,
+    marginBottom: 14,
+  },
+
+  error: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.error,
+  },
+
+  helper: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#9CA3AF",
+  },
+
+  notice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 8,
+  },
+
+  noticeText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.onSurfaceVariant,
+  },
+
+  mgT: {
+    marginTop: 24,
+  },
+
+  blockedHint: {
+    marginTop: 10,
+    textAlign: "center",
+    fontSize: 13,
+    color: "#7A7A7A",
   },
 });

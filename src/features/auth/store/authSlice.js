@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { sendOtpApi, verifyOtpApi } from "../services/auth.services";
 
 /*
@@ -20,27 +21,74 @@ export const TOKEN_KEY = "accessToken";
 
 export const USER_KEY = "authUser";
 
+/*
+|--------------------------------------------------------------------------
+| Argument Shape
+|--------------------------------------------------------------------------
+|
+| These thunks used to take a bare phone string. They now need a country
+| alongside it, and rather than break every existing caller they accept
+| BOTH shapes:
+|
+|     sendOtp("9876543210")
+|     sendOtp({ phone: "9876543210", countryCode: "IN" })
+|
+| This matters more than it looks. `sendOtp.fulfilled` reducer read
+| `action.meta.arg` directly to set state.phone - so switching the argument
+| to an object without this would have quietly stored "[object Object]" as
+| the user's phone number, and every screen reading state.auth.phone would
+| have shown it.
+|
+*/
+
+const normaliseArgs = (input, fallbackOtp) => {
+  if (input && typeof input === "object") {
+    return {
+      phone: String(input.phone ?? input.mobile ?? ""),
+      countryCode: input.countryCode || "IN",
+      otp: input.otp ?? fallbackOtp,
+    };
+  }
+
+  return {
+    phone: String(input ?? ""),
+    countryCode: "IN",
+    otp: fallbackOtp,
+  };
+};
+
 // ─── Send OTP ─────────────────────────────────────────────────────────────────
 export const sendOtp = createAsyncThunk(
   "auth/sendOtp",
-  async (mobile, thunkAPI) => {
+  async (input, thunkAPI) => {
+    const { phone, countryCode } = normaliseArgs(input);
+
     try {
-      const response = await sendOtpApi(mobile);
+      const response = await sendOtpApi(phone, countryCode);
+
       return response.data;
     } catch (error) {
+      /*
+      | The server's own message is what reaches the screen - "Please check
+      | the number", "Too many OTP requests, try again in 12 minutes". The
+      | generic fallback is only for a network drop, which has no body.
+      */
+
       return thunkAPI.rejectWithValue(
-        error.response?.data || { message: error.message }
+        error.response?.data || { message: error.message },
       );
     }
-  }
+  },
 );
 
 // ─── Verify OTP ───────────────────────────────────────────────────────────────
 export const verifyOtp = createAsyncThunk(
   "auth/verifyOtp",
-  async ({ mobile, otp }, thunkAPI) => {
+  async (input, thunkAPI) => {
+    const { phone, countryCode, otp } = normaliseArgs(input);
+
     try {
-      const response = await verifyOtpApi(mobile, otp);
+      const response = await verifyOtpApi(phone, otp, countryCode);
 
       const token = response.data?.data?.token;
 
@@ -59,10 +107,10 @@ export const verifyOtp = createAsyncThunk(
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
-        error.response?.data || { message: error.message }
+        error.response?.data || { message: error.message },
       );
     }
-  }
+  },
 );
 
 // ─── Slice ────────────────────────────────────────────────────────────────────
@@ -72,6 +120,7 @@ const initialState = {
   user: null,
   error: null,
   phone: null,
+  countryCode: "IN",
 };
 
 const authSlice = createSlice({
@@ -118,7 +167,17 @@ const authSlice = createSlice({
       })
       .addCase(sendOtp.fulfilled, (state, action) => {
         state.loading = false;
-        state.phone = action.meta.arg;
+
+        /*
+        | Normalised, not action.meta.arg. The argument can now be an
+        | object, and storing it raw would put "[object Object]" into
+        | state.auth.phone.
+        */
+
+        const { phone, countryCode } = normaliseArgs(action.meta.arg);
+
+        state.phone = phone;
+        state.countryCode = countryCode;
       })
       .addCase(sendOtp.rejected, (state, action) => {
         state.loading = false;

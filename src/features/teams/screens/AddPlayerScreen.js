@@ -1,6 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useCallback } from "react";
 import { View, ScrollView, StyleSheet, Alert } from "react-native";
 import { useSelector } from "react-redux";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { COLORS } from "../../../constants/colors";
 
@@ -14,6 +15,8 @@ import TeamSummaryCard from "../components/TeamSummaryCard";
 import AddPlayerOptions from "../components/AddPlayerOptions";
 import CurrentSquadSection from "../components/CurrentSquadSection";
 import TeamBottomActionBar from "../components/TeamBottomActionBar";
+
+import useTeamInvitations from "../hooks/useTeamInvitations";
 
 export default function AddPlayerScreen({ navigation, route }) {
   /*
@@ -29,12 +32,17 @@ export default function AddPlayerScreen({ navigation, route }) {
     showSuccessBanner = true,
 
     /*
-    | "create" (default) - this is step 2 of creating a team, so the
-    |   primary button is "Review Team" and leads to TeamPreviewScreen.
+    | Both modes now end on "Done" and land on TeamDetailsScreen; the only
+    | difference left is WHICH tab.
+    |
+    | "create" (default) - step 2 of creating a team, so it opens the team
+    |   on its first tab.
     | "manage" - opened from Team Details > Settings > Manage Players, so
-    |   the button is "Done" and returns to that Settings tab. Sending a
-    |   captain who just removed a player into the team-creation preview
-    |   made no sense.
+    |   it returns to the tab it came from.
+    |
+    | The old "Review Team" branch pointed at TeamPreviewScreen, a
+    | read-only summary of a squad the captain had just built one tap
+    | earlier. It is gone - see handlePrimaryAction below.
     */
     mode = "create",
     returnToTab = 4,
@@ -52,6 +60,20 @@ export default function AddPlayerScreen({ navigation, route }) {
 
   /*
   |--------------------------------------------------------------------------
+  | Invitations
+  |--------------------------------------------------------------------------
+  |
+  | Players added manually are no longer pushed straight into the squad -
+  | they get a PENDING invitation and join when they accept. So the squad
+  | list needs to know each player's invitation status to show the ribbon,
+  | otherwise somebody who has not agreed to play looks like a confirmed
+  | member.
+  */
+
+  const { statusOf, reload: reloadInvitations } = useTeamInvitations(teamId);
+
+  /*
+  |--------------------------------------------------------------------------
   | Load Team
   |--------------------------------------------------------------------------
   */
@@ -61,6 +83,17 @@ export default function AddPlayerScreen({ navigation, route }) {
       getTeamById(teamId);
     }
   }, [teamId, getTeamById]);
+
+  /*
+  | Refetched when the screen regains focus, so a player added on the Add
+  | Player screen shows up as pending the moment you come back rather than
+  | after a manual reload.
+  */
+  useFocusEffect(
+    useCallback(() => {
+      reloadInvitations();
+    }, [reloadInvitations]),
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -151,20 +184,24 @@ export default function AddPlayerScreen({ navigation, route }) {
   |--------------------------------------------------------------------------
   */
 
+  /*
+  |--------------------------------------------------------------------------
+  | Done
+  |--------------------------------------------------------------------------
+  |
+  | The "Review Team" step is gone. It navigated to TeamPreviewScreen - a
+  | read-only summary of a squad the captain had just built on this very
+  | screen, one tap earlier. Re-reading what you just typed is not a step,
+  | it is a wall, and it sat between a captain and a finished team.
+  |
+  | Both modes now land on the team itself, which is where you actually
+  | want to be: the real squad, with its tabs and settings.
+  */
+
   const handlePrimaryAction = () => {
-    if (isManageMode) {
-      navigation.navigate("TeamDetailsScreen", {
-        teamId,
-        initialTab: returnToTab,
-      });
-
-      return;
-    }
-
-    navigation.navigate("TeamPreviewScreen", {
-      teamData: teamInfo,
-      players: squad,
+    navigation.navigate("TeamDetailsScreen", {
       teamId,
+      initialTab: isManageMode ? returnToTab : 0,
     });
   };
 
@@ -208,17 +245,24 @@ export default function AddPlayerScreen({ navigation, route }) {
           team={teamInfo}
           players={squad}
           canManage={canManage}
+          statusOf={statusOf}
           onPlayerPress={handlePlayerPress}
           onRemovePlayer={handleRemovePlayer}
         />
       </ScrollView>
 
       <TeamBottomActionBar
-        title={isManageMode ? "Done" : "Review Team"}
-        disabled={!isManageMode && squad.length === 0}
+        title="Done"
+        /*
+        | No longer disabled on an empty squad. Players now have to ACCEPT
+        | an invitation before they appear here, so a captain who has just
+        | invited eleven people still sees an empty squad - blocking them
+        | would trap them on this screen with no way forward and nothing
+        | they could do about it.
+        */
         helperText={
-          !isManageMode && squad.length === 0
-            ? "Add at least one player to continue."
+          squad.length === 0
+            ? "Invited players appear here once they accept."
             : undefined
         }
         onPress={handlePrimaryAction}

@@ -34,10 +34,25 @@ import { buildCommentaryLine } from "../utils/commentary";
 import useScoring from "../../scoring/hooks/useScoring";
 import {
   getMatchByIdApi,
+  getLiveMatchApi,
   transferScoringApi,
 } from "../services/matches.services";
 
 import { COLORS } from "../../../constants/colors";
+
+/*
+| The scorer's way into camera control WITHOUT leaving the scoring pad.
+|
+| This matters more than it looks: the moments a camera needs attention -
+| a phone dropping signal, a broadcaster who has not accepted, a rain
+| break that will auto-end the stream - all happen while the scorer is on
+| this screen with a ball to record. Making them navigate away to find out
+| is how a stream quietly dies mid-match.
+|
+| Renders nothing when no camera is set up and this user cannot set one
+| up, so a normal scoring session is untouched.
+*/
+import LiveStreamBanner from "../../liveStream/components/LiveStreamBanner";
 
 const normalizePlayer = (p) =>
   p?.player && typeof p.player === "object" ? p.player : p;
@@ -46,7 +61,176 @@ export default function LiveScoringScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const { matchId, inningsId, target } = route.params || {};
+  const paramTarget = route.params?.target;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Resolving The Match
+  |--------------------------------------------------------------------------
+  |
+  | matchId was the LAST thing on this screen still read straight out of
+  | route.params, and it is why Wide, No Ball, Bye, Leg Bye and Wicket all
+  | stopped working after the first delivery:
+  |
+  |     [afterBall] ENTERED {"error": "Scoring validation failed:
+  |                           matchId: Path `matchId` is required."}
+  |     [ShotSelection] handleContinue {"inningsId": "6a95b6..."}
+  |     WARN Missing match or innings
+  |
+  | WagonWheelModal and WicketDismissalModal return with
+  | navigate("LiveScoringScreen") and NO params - deliberately, so they
+  | cannot clobber the squads. But React Navigation 6 REPLACES params rather
+  | than merging them, so that call does not leave the old params alone: it
+  | sets them to undefined. Every other value on this screen already had its
+  | own state or a fallback and survived. matchId did not, so from the ball
+  | after the wagon wheel onwards:
+  |
+  |   - handleExtraRuns posted matchId: undefined -> server rejected it
+  |   - handleWicket opened the dismissal sheet with no match
+  |   - handleRun opened the shot sheet with no match, which then refused
+  |     to continue - the Continue button simply did nothing
+  |   - and after an Undo, the same, because Undo does not restore params
+  |
+  | The pad stayed on screen and looked completely alive throughout.
+  |
+  | It is now held in state exactly like the innings id: params are a hint
+  | that seeds it, a later param wins, and nothing can blank it. The innings
+  | itself is a second source - it knows its own match - so even a screen
+  | that was somehow mounted with no params at all recovers.
+  */
+
+  const [resolvedMatchId, setResolvedMatchId] = useState(
+    route.params?.matchId || null,
+  );
+
+  const matchId = resolvedMatchId;
+
+  useEffect(() => {
+    const fromParams = route.params?.matchId;
+
+    if (fromParams && String(fromParams) !== String(resolvedMatchId)) {
+      setResolvedMatchId(String(fromParams));
+    }
+  }, [route.params?.matchId, resolvedMatchId]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Resolving The Innings
+  |--------------------------------------------------------------------------
+  |
+  | THIS SCREEN NO LONGER TRUSTS route.params FOR THE INNINGS.
+  |
+  | It used to read inningsId straight out of params, and when that was
+  | undefined every single thing on the screen quietly stopped:
+  |
+  |     [LiveScoring] loadInnings called {"inningsId": undefined}
+  |     [ShotSelection] handleContinue {"inningsId": undefined, "runs": 6}
+  |     WARN Missing match or innings
+  |
+  | ...and scoring was stuck with no way out but backing all the way to Home.
+  |
+  | There were two ways to get there:
+  |
+  |   BETWEEN INNINGS. The feed's currentInnings is the first innings that
+  |   is NOT completed. The moment the first innings ends, that is null, so
+  |   every card that opens this screen passed inningsId: undefined.
+  |
+  |   THE MODALS. WagonWheelModal and WicketDismissalModal come back with
+  |   navigate("LiveScoringScreen") and no params at all - deliberately, so
+  |   they cannot clobber the squads. Any navigation that landed on a fresh
+  |   instance of this screen therefore had nothing.
+  |
+  | Params are now only a HINT. The screen holds its own resolved id and
+  | asks the server for it whenever the hint is missing - which also means
+  | it recovers by itself rather than needing the user to navigate away and
+  | back.
+  */
+
+  const [resolvedInningsId, setResolvedInningsId] = useState(
+    route.params?.inningsId || null,
+  );
+
+  const [resolvedTarget, setResolvedTarget] = useState(paramTarget);
+
+  const [resolving, setResolving] = useState(false);
+
+  const inningsId = resolvedInningsId;
+
+  // A param arriving later (a fresh navigation with one) wins over a stale id.
+  useEffect(() => {
+    const fromParams = route.params?.inningsId;
+
+    if (fromParams && fromParams !== resolvedInningsId) {
+      setResolvedInningsId(fromParams);
+    }
+  }, [route.params?.inningsId, resolvedInningsId]);
+
+  /*
+  | Ask the server which innings is live on this match. getLiveMatch returns
+  | the active one, so this is correct both for a first visit with no params
+  | and for the moment a second innings opens.
+  */
+
+  useEffect(() => {
+    if (inningsId || !matchId || resolving) return;
+
+    let cancelled = false;
+
+    setResolving(true);
+
+    getLiveMatchApi(matchId)
+      .then((live) => {
+        if (cancelled || !live?.inningsId) return;
+
+        setResolvedInningsId(String(live.inningsId));
+
+        if (live.target != null) setResolvedTarget(live.target);
+      })
+      .catch(() => {
+        /*
+        | "No active innings found" is the honest answer between innings or
+        | after the match ends - so ask the match itself where to go.
+        |
+        | This is what makes the innings break survivable. It used to be
+        | reachable from exactly one place: the ball that ended the first
+        | innings. Close the app at the break and there was no route back to
+        | it from anywhere, and the match could never reach its chase.
+        */
+
+        if (cancelled) return;
+
+        getMatchByIdApi(matchId)
+          .then((m) => {
+            if (cancelled || !m) return;
+
+            if (m.status === "completed") {
+              navigation.replace("MatchResultScreen", { matchId });
+              return;
+            }
+
+            const brk = m.completedInnings;
+
+            if (m.awaitingSecondInnings && brk) {
+              navigation.replace("InningsSummaryScreen", {
+                matchId,
+                inningsId: String(brk.inningsId),
+                battingSquad: [],
+                bowlingSquad: [],
+                battingTeamId: brk.battingTeamId,
+                bowlingTeamId: brk.bowlingTeamId,
+              });
+            }
+          })
+          .catch(() => {});
+      })
+      .finally(() => {
+        if (!cancelled) setResolving(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inningsId, matchId, resolving, navigation]);
 
   /*
   | The squads are read through useMemo rather than destructured with an
@@ -63,12 +247,14 @@ export default function LiveScoringScreen() {
   | has actually changed.
   */
 
-  const battingSquad = useMemo(
+  const target = resolvedTarget;
+
+  const paramBattingSquad = useMemo(
     () => route.params?.battingSquad || [],
     [route.params?.battingSquad],
   );
 
-  const bowlingSquad = useMemo(
+  const paramBowlingSquad = useMemo(
     () => route.params?.bowlingSquad || [],
     [route.params?.bowlingSquad],
   );
@@ -80,13 +266,60 @@ export default function LiveScoringScreen() {
     getInningsScorecard,
     addBall,
     setNextBowler,
+    /*
+    | Already plumbed all the way through the slice and the service, but no
+    | screen had ever destructured it - the incoming batter is sent inline
+    | on the wicket ball instead. It is exactly the endpoint a correction
+    | needs, so it is finally used here.
+    */
+    setNextBatsman,
     undoLastBall,
     endInnings,
   } = useScoring();
 
+  /*
+  | Second source for the match id: the innings knows which match it belongs
+  | to. This only ever fires when params never arrived at all - a deep link,
+  | a remount, a screen restored by the navigator - and it means the scoring
+  | pad can no longer be left in a state where it renders but cannot record.
+  */
+
+  useEffect(() => {
+    if (resolvedMatchId) return;
+
+    const fromInnings =
+      currentInnings?.matchId?._id || currentInnings?.matchId;
+
+    if (fromInnings) setResolvedMatchId(String(fromInnings));
+  }, [resolvedMatchId, currentInnings]);
+
+  /*
+  | A target arriving on a fresh navigation wins, the same way a fresh
+  | inningsId does - otherwise a screen that already held the first innings'
+  | state would show the second innings without its chase.
+  */
+
+  useEffect(() => {
+    if (paramTarget != null && paramTarget !== resolvedTarget) {
+      setResolvedTarget(paramTarget);
+    }
+  }, [paramTarget, resolvedTarget]);
+
   const [extraPicker, setExtraPicker] = useState(null);
+  const [penaltyPicker, setPenaltyPicker] = useState(false);
   const [nextBowlerPicker, setNextBowlerPicker] = useState(false);
   const [pendingBowlerId, setPendingBowlerId] = useState(null);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Changing a batter
+  |--------------------------------------------------------------------------
+  |
+  | Which end the scorer tapped ("striker" | "nonStriker"), or null when the
+  | sheet is closed, plus the replacement they have picked.
+  */
+  const [batsmanPicker, setBatsmanPicker] = useState(null);
+  const [pendingBatsmanId, setPendingBatsmanId] = useState(null);
   const [totalOvers, setTotalOvers] = useState(20);
   const [transferPicker, setTransferPicker] = useState(false);
   const [transferring, setTransferring] = useState(false);
@@ -132,6 +365,52 @@ export default function LiveScoringScreen() {
         console.log("[LiveScoring] getMatchByIdApi FAILED", e?.message);
       });
   }, [matchId]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | The Two Squads
+  |--------------------------------------------------------------------------
+  |
+  | Params are a hint here too, for the same reason as the innings id: the
+  | modals come back without them, and a card opened between innings never
+  | had them.
+  |
+  | When the hint is empty the squads are derived from the match and the
+  | innings' own battingTeam - both already loaded. That matters more than
+  | it looks: handleWicket hands battingSquad and bowlingSquad to the
+  | dismissal modal, and with empty arrays that modal shows "No players
+  | available" and no wicket can be recorded for the rest of the innings.
+  */
+
+  const inningsBattingTeamId = String(
+    currentInnings?.battingTeam?._id || currentInnings?.battingTeam || "",
+  );
+
+  const matchSquads = useMemo(() => {
+    const teamA = (match?.teamASquad || []).map(normalizePlayer);
+    const teamB = (match?.teamBSquad || []).map(normalizePlayer);
+
+    if (!inningsBattingTeamId || !match) {
+      return { batting: [], bowling: [] };
+    }
+
+    const teamAIsBatting =
+      String(match?.teamA?._id) === inningsBattingTeamId;
+
+    return teamAIsBatting
+      ? { batting: teamA, bowling: teamB }
+      : { batting: teamB, bowling: teamA };
+  }, [match, inningsBattingTeamId]);
+
+  const battingSquad = useMemo(
+    () => (paramBattingSquad.length ? paramBattingSquad : matchSquads.batting),
+    [paramBattingSquad, matchSquads],
+  );
+
+  const bowlingSquad = useMemo(
+    () => (paramBowlingSquad.length ? paramBowlingSquad : matchSquads.bowling),
+    [paramBowlingSquad, matchSquads],
+  );
 
   const squadPool = useMemo(
     () => [
@@ -210,9 +489,7 @@ export default function LiveScoringScreen() {
   | the header then falls back to the fixture line rather than guessing.
   */
 
-  const battingTeamId = String(
-    currentInnings?.battingTeam?._id || currentInnings?.battingTeam || "",
-  );
+  const battingTeamId = inningsBattingTeamId;
 
   const teamAIsBatting =
     !!battingTeamId && String(match?.teamA?._id) === battingTeamId;
@@ -386,9 +663,23 @@ export default function LiveScoringScreen() {
         data.targetReached ??
         (target != null && updatedInnings.totalRuns >= target);
 
+      /*
+      | The server ends the innings and, when it was the second, completes
+      | the match and writes the result. `matchCompleted` says it did.
+      |
+      | endInnings is still called for an older server build that does not,
+      | and `replace` rather than `navigate` so the finished match cannot be
+      | swiped back into a live-looking scoring pad.
+      */
+
+      if (data.matchCompleted) {
+        navigation.replace("MatchResultScreen", { matchId });
+        return;
+      }
+
       if (isTargetAchieved) {
         await endInnings(inningsId);
-        navigation.navigate("MatchResultScreen", { matchId });
+        navigation.replace("MatchResultScreen", { matchId });
         return;
       }
 
@@ -608,16 +899,59 @@ export default function LiveScoringScreen() {
     }
   };
 
-  const hasCrease = () => {
-    if (strikerId() && bowlerId()) return true;
+  /*
+  | Every path that records something goes through this first.
+  |
+  | The innings check is the one that was missing. Without it a screen that
+  | had lost its inningsId still rendered a full scoring pad: tapping 6
+  | opened the shot picker, which passed inningsId: undefined to the wagon
+  | wheel, which refused to submit - and the scorer was left tapping a live
+  | -looking pad that silently recorded nothing.
+  */
 
-    Alert.alert("Select Players", "Set the current striker and bowler first.");
+  const canRecord = () => {
+    /*
+    | With matchId held in state this should now be unreachable. It stays as
+    | the honest failure: a scorer who somehow gets here is told the pad
+    | cannot record, instead of tapping buttons that post nothing and reading
+    | a raw Mongoose validation error a moment later.
+    */
 
-    return false;
+    if (!matchId) {
+      Alert.alert(
+        "Match not loaded",
+        "This scoring screen has lost track of its match. Go back to the match and open Score again.",
+      );
+
+      return false;
+    }
+
+    if (!inningsId) {
+      Alert.alert(
+        resolving ? "One moment" : "No innings open",
+        resolving
+          ? "Still loading this match's innings. Try again in a second."
+          : "This match has no innings in progress. Reopen it from the match screen to start the next innings.",
+      );
+
+      return false;
+    }
+
+    if (!strikerId() || !bowlerId()) {
+      Alert.alert(
+        "Select Players",
+        "Set the current striker and bowler first.",
+      );
+
+      return false;
+    }
+
+    return true;
   };
 
+
   const handleRun = async (runs) => {
-    if (!hasCrease()) return;
+    if (!canRecord()) return;
 
     /*
     | Dot balls used to skip straight to addBall, which meant a third of a
@@ -651,7 +985,7 @@ export default function LiveScoringScreen() {
 
     setExtraPicker(null);
 
-    if (!hasCrease()) return;
+    if (!canRecord()) return;
 
     await withSubmitLock(async () => {
       const result = await addBall({
@@ -668,8 +1002,67 @@ export default function LiveScoringScreen() {
     });
   };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Penalty Runs (Law 41)
+  |--------------------------------------------------------------------------
+  |
+  | Five runs to the batting side for an offence by the fielding side.
+  |
+  | Not a delivery: no ball is bowled, no batter faces it, the bowler is not
+  | charged, and the strike does not rotate. The server enforces all of that
+  | from `extraType: "penalty"` - this screen only has to say it happened
+  | and why.
+  |
+  | It goes through addBall like everything else, which is what makes it
+  | undoable with no extra code: Undo reverses whatever the stored row says,
+  | and the row says +5 to the team and nothing to anybody.
+  |
+  | v1 awards to the BATTING side only. A penalty against the batting side
+  | belongs to the other team's total, which for a side that has not batted
+  | yet has nowhere to live - that needs its own design, not a fifth button.
+  */
+
+  const PENALTY_REASONS = [
+    "Illegal fielding",
+    "Deliberate distraction",
+    "Damaging the pitch",
+    "Ball tampering",
+    "Other",
+  ];
+
+  const handlePenalty = async (reason) => {
+    setPenaltyPicker(false);
+
+    if (!canRecord()) return;
+
+    await withSubmitLock(async () => {
+      const result = await addBall({
+        matchId,
+        inningsId,
+        extraType: "penalty",
+        runs: 5,
+        penaltyReason: reason,
+        isWicket: false,
+      });
+
+      await afterBall(result);
+    });
+  };
+
   const handleWicket = () => {
-    if (!hasCrease()) return;
+    if (!canRecord()) return;
+
+    /*
+    | Everyone already dismissed in this innings, so the modal can leave
+    | them out of the "new batsman" list - and recognise the last wicket,
+    | where there is nobody left to come in.
+    */
+
+    const dismissedPlayerIds = ballList
+      .filter((b) => b.isWicket)
+      .map((b) => String(b.dismissedPlayerId?._id || b.dismissedPlayerId || b.batsmanId?._id || b.batsmanId || ""))
+      .filter(Boolean);
 
     navigation.navigate("WicketDismissalModal", {
       matchId,
@@ -679,7 +1072,117 @@ export default function LiveScoringScreen() {
       bowlerId: bowlerId(),
       battingSquad,
       bowlingSquad,
+      dismissedPlayerIds,
     });
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Change batsman
+  |--------------------------------------------------------------------------
+  |
+  | TWO DIFFERENT THINGS WEAR THE SAME BUTTON, AND ONLY ONE IS A CORRECTION.
+  |
+  | If the batter at that end has faced NO balls, the scorer simply tapped
+  | the wrong name. Nothing happened on the field, nothing is in the
+  | scorecard, and swapping them is a correction - handled here.
+  |
+  | The moment they have faced a ball, those runs and those balls belong to
+  | them. Swapping them out silently would move another player's innings
+  | into their career record. The only lawful way off strike is a
+  | retirement, which IS a scorecard entry - so that case is handed to the
+  | dismissal sheet, which already implements retired hurt and retired out
+  | correctly (no ball counted, no bowler credit, and retired hurt stays
+  | eligible to return at the next fall of a wicket, per Law 25.4).
+  */
+
+  const handleChangeBatsman = (end) => {
+    if (!canRecord()) return;
+
+    const playerId = end === "striker" ? strikerId() : nonStrikerId();
+
+    const faced = battingFigures(playerId)?.balls || 0;
+
+    if (faced > 0) {
+      Alert.alert(
+        "Change Batsman",
+        `${resolvePlayerName(playerId)} has already faced ${faced} ball${faced === 1 ? "" : "s"}. ` +
+          "Those runs belong to them, so they can only leave the crease by retiring.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Retire…",
+            onPress: () => {
+              /*
+              | Straight into the dismissal sheet. `preselectPlayerId` and
+              | `retirementOnly` tell it which batter and to offer only the
+              | two retirement options - it already knows how to do both.
+              */
+              const dismissedPlayerIds = ballList
+                .filter((b) => b.isWicket)
+                .map((b) =>
+                  String(
+                    b.dismissedPlayerId?._id ||
+                      b.dismissedPlayerId ||
+                      b.batsmanId?._id ||
+                      b.batsmanId ||
+                      "",
+                  ),
+                )
+                .filter(Boolean);
+
+              navigation.navigate("WicketDismissalModal", {
+                matchId,
+                inningsId,
+                strikerId: strikerId(),
+                nonStrikerId: nonStrikerId(),
+                bowlerId: bowlerId(),
+                battingSquad,
+                bowlingSquad,
+                dismissedPlayerIds,
+                preselectPlayerId: playerId,
+                retirementOnly: true,
+              });
+            },
+          },
+        ],
+      );
+
+      return;
+    }
+
+    setPendingBatsmanId(null);
+    setBatsmanPicker(end);
+  };
+
+  const handleConfirmBatsman = async () => {
+    if (!pendingBatsmanId || !batsmanPicker) return;
+
+    const chosenId = pendingBatsmanId;
+    const end = batsmanPicker;
+
+    setBatsmanPicker(null);
+    setPendingBatsmanId(null);
+
+    try {
+      const result = await setNextBatsman(inningsId, chosenId, end);
+
+      if (result?.success === false || result?.error) {
+        Alert.alert(
+          "Could Not Change Batsman",
+          result.error || "Please try again.",
+        );
+
+        return;
+      }
+
+      loadInnings();
+    } catch (error) {
+      Alert.alert(
+        "Could Not Change Batsman",
+        error?.message || "Please try again.",
+      );
+    }
   };
 
   const handleConfirmNextBowler = async () => {
@@ -760,6 +1263,28 @@ export default function LiveScoringScreen() {
     }
   };
 
+  /*
+  | The batting side's squad, for the correction picker. Mirrors bowlingPool
+  | below but resolves the BATTING team - the two are opposite sides of the
+  | same comparison, and getting it backwards would offer the fielding side
+  | as replacement batters.
+  */
+  const battingPool = (() => {
+    const innerBattingTeamId =
+      currentInnings?.battingTeam?._id || currentInnings?.battingTeam;
+
+    const teamAId = match?.teamA?._id;
+
+    const raw =
+      innerBattingTeamId && teamAId && String(innerBattingTeamId) === String(teamAId)
+        ? match?.teamASquad || []
+        : match?.teamBSquad || [];
+
+    const pool = raw.length ? raw : battingSquad;
+
+    return pool.map(normalizePlayer);
+  })();
+
   const bowlingPool = (() => {
     const bowlingTeamId =
       currentInnings?.bowlingTeam?._id || currentInnings?.bowlingTeam;
@@ -809,6 +1334,20 @@ export default function LiveScoringScreen() {
         }
       />
 
+      {/*
+      | The scorer IS the person who controls the cameras, and this is the
+      | screen they are on for three hours.
+      |
+      | NO canManage prop. Reaching the scoring pad does NOT prove you own
+      | the cameras - the opposing captain can reach it too. The server
+      | decides, and the banner renders nothing for anyone else.
+      |
+      | flush because this screen's scrollContent already has padding: 16.
+      | Without it the banner adds its own 16 on top and ends up 32 in from
+      | each edge - narrower than every card around it.
+      */}
+      <LiveStreamBanner matchId={matchId} flush />
+
       {target != null && (
         <ChaseStats
           target={target}
@@ -838,6 +1377,7 @@ export default function LiveScoringScreen() {
           ...bowlingFigures(bowlerId()),
         }}
         onChangeBowler={() => setNextBowlerPicker(true)}
+        onChangeBatsman={handleChangeBatsman}
         onPressPlayer={(playerId) =>
           navigation.navigate("TeamStack", {
             screen: "PlayerProfileScreen",
@@ -850,6 +1390,7 @@ export default function LiveScoringScreen() {
         onRun={handleRun}
         onWicket={handleWicket}
         onExtra={(type) => setExtraPicker(type)}
+        onPenalty={() => setPenaltyPicker(true)}
       />
 
       <MatchControls
@@ -896,6 +1437,33 @@ export default function LiveScoringScreen() {
         </View>
       </Modal>
 
+      <Modal visible={penaltyPicker} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>5 Penalty Runs</Text>
+
+            <Text style={styles.modalHint}>
+              Awarded to the batting side. Not a ball, not charged to the
+              bowler.
+            </Text>
+
+            {PENALTY_REASONS.map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={styles.playerRow}
+                onPress={() => handlePenalty(reason)}
+              >
+                <Text style={styles.playerRowText}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity onPress={() => setPenaltyPicker(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={nextBowlerPicker} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -936,6 +1504,97 @@ export default function LiveScoringScreen() {
               onPress={handleConfirmNextBowler}
             >
               <Text style={styles.confirmButtonText}>Confirm Bowler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/*
+        | Correction only. handleChangeBatsman never opens this for a batter
+        | who has faced a ball - that case goes to the retirement sheet,
+        | because those runs have to belong to somebody.
+      */}
+      <Modal
+        visible={!!batsmanPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBatsmanPicker(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              Replace{" "}
+              {batsmanPicker === "striker" ? "Striker" : "Non-Striker"}
+            </Text>
+
+            <ScrollView style={styles.liveMaxer}>
+              {battingPool
+                .filter((p) => {
+                  const id = String(p._id);
+
+                  /*
+                  | Nobody already at the crease - putting one player on
+                  | both ends makes strike rotation swap him with himself
+                  | and the partnership can never break. The server refuses
+                  | it too; this just keeps it off the list.
+                  */
+                  if (
+                    id === String(strikerId()) ||
+                    id === String(nonStrikerId())
+                  ) {
+                    return false;
+                  }
+
+                  /*
+                  | Nobody already out. Retired batters are NOT excluded -
+                  | retired hurt is stored with isWicket:false precisely so
+                  | they can come back, which is what Law 25.4 allows.
+                  */
+                  return !ballList.some(
+                    (b) =>
+                      b.isWicket &&
+                      String(
+                        b.dismissedPlayerId?._id ||
+                          b.dismissedPlayerId ||
+                          b.batsmanId?._id ||
+                          b.batsmanId ||
+                          "",
+                      ) === id,
+                  );
+                })
+                .map((player) => (
+                  <TouchableOpacity
+                    key={player._id}
+                    style={[
+                      styles.playerRow,
+                      pendingBatsmanId === player._id &&
+                        styles.playerRowSelected,
+                    ]}
+                    onPress={() => setPendingBatsmanId(player._id)}
+                  >
+                    <Text style={styles.playerRowText}>
+                      {player.playerName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[
+                styles.confirmButton,
+                !pendingBatsmanId && styles.confirmButtonDisabled,
+              ]}
+              disabled={!pendingBatsmanId}
+              onPress={handleConfirmBatsman}
+            >
+              <Text style={styles.confirmButtonText}>Confirm Batsman</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelLink}
+              onPress={() => setBatsmanPicker(null)}
+            >
+              <Text style={styles.cancelLinkText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1019,6 +1678,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
+  modalHint: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.onSurfaceVariant,
+    marginTop: -10,
+    marginBottom: 14,
+  },
+
   chipRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1078,6 +1745,23 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     color: COLORS.onPrimary,
     fontWeight: "700",
+  },
+
+  /*
+  | The batsman picker needs a way out that is not a system back gesture -
+  | the bowler picker has none because a new bowler is mandatory between
+  | overs, but a correction is always abandonable.
+  */
+  cancelLink: {
+    marginTop: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+
+  cancelLinkText: {
+    color: COLORS.onSurfaceVariant,
+    fontWeight: "600",
+    fontSize: 13,
   },
 
 

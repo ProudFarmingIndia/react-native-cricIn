@@ -177,9 +177,72 @@ export const NOTIFICATION_TYPES = {
   TOURNAMENT_INVITATION: "TOURNAMENT_INVITATION",
  
   TOURNAMENT_STARTED: "TOURNAMENT_STARTED",
- 
+
   TOURNAMENT_COMPLETED: "TOURNAMENT_COMPLETED",
- 
+
+  /*
+  | The nine types the tournament module actually emits. The four above
+  | predate it and are kept because older notifications already in the
+  | database carry them - removing them here would leave those rows with
+  | the default icon and no category.
+  |
+  | TOURNAMENT_INVITE_RECEIVED is the only actionable one: it goes to a
+  | team's CAPTAIN and nobody else, and carries data.tournamentId and
+  | data.teamId, which is what the accept screen needs.
+  |
+  | TOURNAMENT_JOIN_REQUEST goes the other way - a captain asking to enter
+  | a tournament with public participation on - and lands on the
+  | ORGANIZER, who answers it from the manage screen.
+  */
+
+  TOURNAMENT_INVITE_RECEIVED: "TOURNAMENT_INVITE_RECEIVED",
+
+  TOURNAMENT_INVITE_ACCEPTED: "TOURNAMENT_INVITE_ACCEPTED",
+
+  TOURNAMENT_INVITE_DECLINED: "TOURNAMENT_INVITE_DECLINED",
+
+  TOURNAMENT_JOIN_REQUEST: "TOURNAMENT_JOIN_REQUEST",
+
+  TOURNAMENT_FIXTURES_READY: "TOURNAMENT_FIXTURES_READY",
+
+  TOURNAMENT_MATCH_REMINDER: "TOURNAMENT_MATCH_REMINDER",
+
+  TOURNAMENT_SCORER_ASSIGNED: "TOURNAMENT_SCORER_ASSIGNED",
+
+  TOURNAMENT_SCORER_REVOKED: "TOURNAMENT_SCORER_REVOKED",
+
+  TOURNAMENT_CANCELLED: "TOURNAMENT_CANCELLED",
+
+  /*
+  |--------------------------------------------------------------------------
+  | Series
+  |--------------------------------------------------------------------------
+  |
+  | A bilateral series has ONE invite, to the opponent team's captain, and
+  | it is the only actionable one here - everything else is news.
+  |
+  | Deliberately its own set rather than reusing the TOURNAMENT_* types.
+  | They carry a seriesId rather than a tournamentId, route to a different
+  | screen, and a captain reading "Tournament invite" for a three-match
+  | series would reasonably wonder what they had been entered into.
+  */
+
+  SERIES_INVITE_RECEIVED: "SERIES_INVITE_RECEIVED",
+
+  SERIES_INVITE_ACCEPTED: "SERIES_INVITE_ACCEPTED",
+
+  SERIES_INVITE_DECLINED: "SERIES_INVITE_DECLINED",
+
+  SERIES_FIXTURES_READY: "SERIES_FIXTURES_READY",
+
+  SERIES_MATCH_REMINDER: "SERIES_MATCH_REMINDER",
+
+  SERIES_SCORER_ASSIGNED: "SERIES_SCORER_ASSIGNED",
+
+  SERIES_SCORER_REVOKED: "SERIES_SCORER_REVOKED",
+
+  SERIES_CANCELLED: "SERIES_CANCELLED",
+
   /*
   |--------------------------------------------------------------------------
   | Ground
@@ -213,7 +276,48 @@ export const NOTIFICATION_TYPES = {
   FOLLOW_ACCEPTED: "FOLLOW_ACCEPTED",
  
   FOLLOW_REJECTED: "FOLLOW_REJECTED",
- 
+
+  /*
+  |--------------------------------------------------------------------------
+  | Live Streaming
+  |--------------------------------------------------------------------------
+  |
+  | These MUST match backend/src/modules/notifications/notification.types.ts
+  | character for character - see the warning at the top of this file. A
+  | mismatch here is silent: the notification still arrives, but it gets
+  | the default icon, no Accept/Reject buttons, and tapping it opens the
+  | generic detail screen instead of the invite.
+  |
+  | BROADCAST_INVITE_RECEIVED is the only actionable one - it is the
+  | invite asking someone to film a match, and it carries data.matchId and
+  | data.angle.
+  |
+  */
+
+  BROADCAST_INVITE_RECEIVED: "BROADCAST_INVITE_RECEIVED",
+
+  BROADCAST_INVITE_ACCEPTED: "BROADCAST_INVITE_ACCEPTED",
+
+  BROADCAST_INVITE_DECLINED: "BROADCAST_INVITE_DECLINED",
+
+  BROADCAST_INVITE_REVOKED: "BROADCAST_INVITE_REVOKED",
+
+  /*
+  | A camera has connected on a match you follow. Separate from
+  | FOLLOWED_MATCH_LIVE, which is about scoring starting - they happen at
+  | different times and offer different things (a scorecard vs a picture).
+  */
+
+  FOLLOWED_STREAM_LIVE: "FOLLOWED_STREAM_LIVE",
+
+  /*
+  | Only fires when KEEP_RECORDINGS is switched on. In phase one no
+  | post-match video is stored, so nothing sends this - it is listed so
+  | that turning replays back on later needs no app change.
+  */
+
+  RECORDING_EXPIRING: "RECORDING_EXPIRING",
+
   /*
   |--------------------------------------------------------------------------
   | System
@@ -327,6 +431,41 @@ export const NOTIFICATION_CATEGORY_MAP = {
   TOURNAMENT_COMPLETED: "TOURNAMENT",
 
   /*
+  | The invite and the join request are filed under INVITATION, not
+  | TOURNAMENT, for the same reason the broadcast invite is: they are
+  | somebody asking you to do something, and they belong next to the other
+  | invites waiting for an answer. Everything else about a tournament is
+  | news, and goes in the TOURNAMENT tab.
+  */
+  TOURNAMENT_INVITE_RECEIVED: "INVITATION",
+  TOURNAMENT_JOIN_REQUEST: "INVITATION",
+
+  TOURNAMENT_INVITE_ACCEPTED: "TOURNAMENT",
+  TOURNAMENT_INVITE_DECLINED: "TOURNAMENT",
+  TOURNAMENT_FIXTURES_READY: "TOURNAMENT",
+  TOURNAMENT_MATCH_REMINDER: "TOURNAMENT",
+  TOURNAMENT_SCORER_ASSIGNED: "TOURNAMENT",
+  TOURNAMENT_SCORER_REVOKED: "TOURNAMENT",
+  TOURNAMENT_CANCELLED: "TOURNAMENT",
+
+  /*
+  | Series. Filed under the TOURNAMENT category rather than a new one -
+  | the filter row is already eight chips wide and a ninth would start
+  | scrolling, while "Tournament" is close enough to how people think
+  | about both. The invite goes under INVITATION with the other things
+  | waiting for an answer.
+  */
+  SERIES_INVITE_RECEIVED: "INVITATION",
+
+  SERIES_INVITE_ACCEPTED: "TOURNAMENT",
+  SERIES_INVITE_DECLINED: "TOURNAMENT",
+  SERIES_FIXTURES_READY: "TOURNAMENT",
+  SERIES_MATCH_REMINDER: "TOURNAMENT",
+  SERIES_SCORER_ASSIGNED: "TOURNAMENT",
+  SERIES_SCORER_REVOKED: "TOURNAMENT",
+  SERIES_CANCELLED: "TOURNAMENT",
+
+  /*
   | Social - follow activity.
   |
   | PLAYER_OF_THE_MATCH is the award landing on the player who won it, so
@@ -338,6 +477,27 @@ export const NOTIFICATION_CATEGORY_MAP = {
   FOLLOWED_PLAYER_AWARD: "SOCIAL",
   FOLLOWED_PLAYER_MILESTONE: "SOCIAL",
   PLAYER_OF_THE_MATCH: "MATCH",
+
+  /*
+  | Live streaming.
+  |
+  | The invite is filed under INVITATION, not MATCH, because that is what
+  | it is: somebody asking you to do something, sitting next to the team
+  | invites in the same tab. The invited person is often in neither squad,
+  | so burying it under "Matches" - a tab full of fixtures they have no
+  | connection to - is exactly where they would not look.
+  |
+  | FOLLOWED_STREAM_LIVE is follower news, so it goes with the rest of the
+  | follow activity and can be muted with it.
+  */
+  BROADCAST_INVITE_RECEIVED: "INVITATION",
+  BROADCAST_INVITE_ACCEPTED: "INVITATION",
+  BROADCAST_INVITE_DECLINED: "INVITATION",
+  BROADCAST_INVITE_REVOKED: "INVITATION",
+
+  FOLLOWED_STREAM_LIVE: "SOCIAL",
+
+  RECORDING_EXPIRING: "MATCH",
 
   // System - anything without a home of its own
   CHAT_MESSAGE: "SYSTEM",

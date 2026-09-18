@@ -33,6 +33,13 @@ import {
 
 import HighlightsFeed from "../../highlights/components/HighlightsFeed";
 
+/*
+| The live-streaming strip. One line here rather than a section threaded
+| through this 2,400-line screen - it owns its own fetching and renders
+| nothing when there is nothing to say.
+*/
+import LiveStreamBanner from "../../liveStream/components/LiveStreamBanner";
+
 import CommentarySection from "../../../components/matches/LiveScoringScreen/CommentarySection";
 
 /*
@@ -929,8 +936,20 @@ const LiveTab = ({ match, live, liveLoading, commentary }) => {
             <Text style={styles.creaseCell}>B</Text>
           </View>
 
+          {/*
+          | Keyed by CREASE POSITION, not by player.
+          |
+          | This is a fixed pair whose order carries the meaning - slot 0 is
+          | on strike, slot 1 is not - so position is the row's real
+          | identity. Keying on player._id also breaks the moment the server
+          | reports the same player at both ends, which it can do for a
+          | render or two mid-update, and two rows then share a key.
+          */}
           {[striker, nonStriker].filter(Boolean).map((player, index) => (
-            <View key={player._id || index} style={styles.creaseRow}>
+            <View
+              key={index === 0 ? "crease-striker" : "crease-non-striker"}
+              style={styles.creaseRow}
+            >
               <Text
                 style={[styles.creaseName, styles.creaseCellName]}
                 numberOfLines={1}
@@ -1013,6 +1032,14 @@ const PlayerOfTheMatchCard = ({ match, onPressPlayer }) => {
     return null;
   }
 
+  const initials = String(potm.playerName || "?")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
   return (
     <View style={styles.tabContent}>
       <TouchableOpacity
@@ -1020,13 +1047,51 @@ const PlayerOfTheMatchCard = ({ match, onPressPlayer }) => {
         onPress={() => onPressPlayer?.(potm._id)}
         activeOpacity={0.75}
       >
-        <Text style={styles.potmLabel}>PLAYER OF THE MATCH</Text>
+        <View style={styles.potmHeader}>
+          <MaterialIcons name="emoji-events" size={15} color={C.secondary} />
 
-        <Text style={styles.potmName}>{potm.playerName}</Text>
+          <Text style={styles.potmLabel}>PLAYER OF THE MATCH</Text>
+        </View>
 
-        {!!potm.playerType && (
-          <Text style={styles.potmRole}>{potm.playerType}</Text>
-        )}
+        <View style={styles.potmBody}>
+          {potm.profileImage ? (
+            <Image
+              source={{ uri: potm.profileImage }}
+              style={styles.potmAvatar}
+            />
+          ) : (
+            <View style={[styles.potmAvatar, styles.potmAvatarFallback]}>
+              <Text style={styles.potmInitials}>{initials}</Text>
+            </View>
+          )}
+
+          <View style={styles.potmText}>
+            <Text style={styles.potmName} numberOfLines={1}>
+              {potm.playerName}
+            </Text>
+
+            {/*
+            | The numbers, not just the name. "82 (41) & 2/24" is what makes
+            | the award legible to somebody who did not watch - and settles
+            | the argument the card would otherwise start.
+            */}
+            {!!match.playerOfTheMatchStats && (
+              <Text style={styles.potmStats}>
+                {match.playerOfTheMatchStats}
+              </Text>
+            )}
+
+            {!!potm.playerType && (
+              <Text style={styles.potmRole}>{potm.playerType}</Text>
+            )}
+          </View>
+
+          <MaterialIcons
+            name="chevron-right"
+            size={20}
+            color={C.onSurfaceVariant}
+          />
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -1473,7 +1538,42 @@ export default function MatchDetailsScreen() {
       >
         <HeroCard match={match} canManage={match.canManage} />
 
-        {match.canManage && match.isInviteSender && match.status === "upcoming" && (
+        {/*
+        | Live streaming.
+        |
+        | Self-contained: it fetches its own stream state and renders
+        | NOTHING when this match has no camera and this user could not
+        | set one up - so it does not put a dead "no stream" box on every
+        | match in the app.
+        |
+        | NO canManage prop is passed. match.canManage means "manages
+        | either team", so passing it gave BOTH captains a camera panel on
+        | every challenged match. Only the server's own answer decides.
+        */}
+        <LiveStreamBanner matchId={matchId} />
+
+        {/*
+        | Who sees Start Match.
+        |
+        | `canStart` comes from the server and mirrors what startMatch
+        | actually authorises: either captain, OR the person recorded as
+        | the match's scorer.
+        |
+        | It was gated on `canManage` - "captain of one of the two teams" -
+        | and that had one specific victim: the TOURNAMENT AND SERIES
+        | ORGANIZER. An organizer is the fixture's scorer by default and
+        | captains neither side, so canManage was false, the button never
+        | rendered, and they could open their own tournament's match with
+        | no way to begin it.
+        |
+        | Before that it was also gated on isInviteSender, so the captain
+        | who ACCEPTED a challenge never saw it either.
+        |
+        | Being the sender, or a captain, was never the qualification. The
+        | PIN gate is what proves everyone is present - and for an
+        | organizer that means a PIN from BOTH captains.
+        */}
+        {match.canStart && match.status === "upcoming" && (
           <TouchableOpacity
             style={[styles.startButton, starting && styles.startButtonDisabled]}
             onPress={handleStartMatch}
@@ -2101,13 +2201,54 @@ const styles = StyleSheet.create({
   },
 
   potmName: {
-    marginTop: 5,
     fontSize: 18,
     fontWeight: "800",
     color: C.onSurface,
   },
 
   potmRole: { marginTop: 2, fontSize: 12, color: C.onSurfaceVariant },
+
+  potmHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+
+  potmBody: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    gap: 12,
+  },
+
+  potmAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.surfaceContainer,
+  },
+
+  potmAvatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: C.secondaryContainer,
+  },
+
+  potmInitials: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: C.secondary,
+  },
+
+  potmText: { flex: 1 },
+
+  potmStats: {
+    marginTop: 3,
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.secondary,
+  },
 
   /*
   | The Match PIN card referenced these three styles but none of them were
