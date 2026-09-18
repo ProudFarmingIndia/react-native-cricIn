@@ -11,12 +11,19 @@ import TeamPlayerCard from "./TeamPlayerCard";
 
 import { COLORS } from "../../../constants/colors";
 
+/*
+| `statusOf` comes from useTeamInvitations - it maps a player id to their
+| invitation status, or null for a confirmed member. Optional, so this
+| component still renders correctly anywhere it is used without it.
+*/
+
 export default function CurrentSquadSection({
   team,
   players = [],
   canManage = false,
   onPlayerPress,
   onRemovePlayer,
+  statusOf,
 }) {
   return (
     <View style={styles.container}>
@@ -35,15 +42,22 @@ export default function CurrentSquadSection({
       {players.length === 0 ? (
         <EmptySquadState />
       ) : (
+        /*
+        | Wrapped rather than changing TeamPlayerCard's own marginBottom -
+        | that card is also used in TeamPlayersTab and the team profile,
+        | and this list is the only place that wanted more air between rows.
+        */
         players.map((player) => (
-          <TeamPlayerCard
-            key={player._id}
-            player={player}
-            team={team}
-            canManage={canManage}
-            onPress={onPlayerPress}
-            onRemove={onRemovePlayer}
-          />
+          <View key={player._id} style={styles.cardWrapper}>
+            <TeamPlayerCard
+              player={player}
+              team={team}
+              invitationStatus={statusOf?.(player._id)}
+              canManage={canManage}
+              onPress={onPlayerPress}
+              onRemove={onRemovePlayer}
+            />
+          </View>
         ))
       )}
     </View>
@@ -54,6 +68,10 @@ const styles = StyleSheet.create({
   container: {
     marginTop: 26,
     marginBottom: 20,
+  },
+
+  cardWrapper: {
+    marginBottom: 6,
   },
 
   header: {

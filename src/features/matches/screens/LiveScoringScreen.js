@@ -40,6 +40,20 @@ import {
 
 import { COLORS } from "../../../constants/colors";
 
+/*
+| The scorer's way into camera control WITHOUT leaving the scoring pad.
+|
+| This matters more than it looks: the moments a camera needs attention -
+| a phone dropping signal, a broadcaster who has not accepted, a rain
+| break that will auto-end the stream - all happen while the scorer is on
+| this screen with a ball to record. Making them navigate away to find out
+| is how a stream quietly dies mid-match.
+|
+| Renders nothing when no camera is set up and this user cannot set one
+| up, so a normal scoring session is untouched.
+*/
+import LiveStreamBanner from "../../liveStream/components/LiveStreamBanner";
+
 const normalizePlayer = (p) =>
   p?.player && typeof p.player === "object" ? p.player : p;
 
@@ -252,6 +266,13 @@ export default function LiveScoringScreen() {
     getInningsScorecard,
     addBall,
     setNextBowler,
+    /*
+    | Already plumbed all the way through the slice and the service, but no
+    | screen had ever destructured it - the incoming batter is sent inline
+    | on the wicket ball instead. It is exactly the endpoint a correction
+    | needs, so it is finally used here.
+    */
+    setNextBatsman,
     undoLastBall,
     endInnings,
   } = useScoring();
@@ -288,6 +309,17 @@ export default function LiveScoringScreen() {
   const [penaltyPicker, setPenaltyPicker] = useState(false);
   const [nextBowlerPicker, setNextBowlerPicker] = useState(false);
   const [pendingBowlerId, setPendingBowlerId] = useState(null);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Changing a batter
+  |--------------------------------------------------------------------------
+  |
+  | Which end the scorer tapped ("striker" | "nonStriker"), or null when the
+  | sheet is closed, plus the replacement they have picked.
+  */
+  const [batsmanPicker, setBatsmanPicker] = useState(null);
+  const [pendingBatsmanId, setPendingBatsmanId] = useState(null);
   const [totalOvers, setTotalOvers] = useState(20);
   const [transferPicker, setTransferPicker] = useState(false);
   const [transferring, setTransferring] = useState(false);
@@ -1044,6 +1076,115 @@ export default function LiveScoringScreen() {
     });
   };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Change batsman
+  |--------------------------------------------------------------------------
+  |
+  | TWO DIFFERENT THINGS WEAR THE SAME BUTTON, AND ONLY ONE IS A CORRECTION.
+  |
+  | If the batter at that end has faced NO balls, the scorer simply tapped
+  | the wrong name. Nothing happened on the field, nothing is in the
+  | scorecard, and swapping them is a correction - handled here.
+  |
+  | The moment they have faced a ball, those runs and those balls belong to
+  | them. Swapping them out silently would move another player's innings
+  | into their career record. The only lawful way off strike is a
+  | retirement, which IS a scorecard entry - so that case is handed to the
+  | dismissal sheet, which already implements retired hurt and retired out
+  | correctly (no ball counted, no bowler credit, and retired hurt stays
+  | eligible to return at the next fall of a wicket, per Law 25.4).
+  */
+
+  const handleChangeBatsman = (end) => {
+    if (!canRecord()) return;
+
+    const playerId = end === "striker" ? strikerId() : nonStrikerId();
+
+    const faced = battingFigures(playerId)?.balls || 0;
+
+    if (faced > 0) {
+      Alert.alert(
+        "Change Batsman",
+        `${resolvePlayerName(playerId)} has already faced ${faced} ball${faced === 1 ? "" : "s"}. ` +
+          "Those runs belong to them, so they can only leave the crease by retiring.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Retire…",
+            onPress: () => {
+              /*
+              | Straight into the dismissal sheet. `preselectPlayerId` and
+              | `retirementOnly` tell it which batter and to offer only the
+              | two retirement options - it already knows how to do both.
+              */
+              const dismissedPlayerIds = ballList
+                .filter((b) => b.isWicket)
+                .map((b) =>
+                  String(
+                    b.dismissedPlayerId?._id ||
+                      b.dismissedPlayerId ||
+                      b.batsmanId?._id ||
+                      b.batsmanId ||
+                      "",
+                  ),
+                )
+                .filter(Boolean);
+
+              navigation.navigate("WicketDismissalModal", {
+                matchId,
+                inningsId,
+                strikerId: strikerId(),
+                nonStrikerId: nonStrikerId(),
+                bowlerId: bowlerId(),
+                battingSquad,
+                bowlingSquad,
+                dismissedPlayerIds,
+                preselectPlayerId: playerId,
+                retirementOnly: true,
+              });
+            },
+          },
+        ],
+      );
+
+      return;
+    }
+
+    setPendingBatsmanId(null);
+    setBatsmanPicker(end);
+  };
+
+  const handleConfirmBatsman = async () => {
+    if (!pendingBatsmanId || !batsmanPicker) return;
+
+    const chosenId = pendingBatsmanId;
+    const end = batsmanPicker;
+
+    setBatsmanPicker(null);
+    setPendingBatsmanId(null);
+
+    try {
+      const result = await setNextBatsman(inningsId, chosenId, end);
+
+      if (result?.success === false || result?.error) {
+        Alert.alert(
+          "Could Not Change Batsman",
+          result.error || "Please try again.",
+        );
+
+        return;
+      }
+
+      loadInnings();
+    } catch (error) {
+      Alert.alert(
+        "Could Not Change Batsman",
+        error?.message || "Please try again.",
+      );
+    }
+  };
+
   const handleConfirmNextBowler = async () => {
     console.log("[LiveScoring] handleConfirmNextBowler", { pendingBowlerId, inningsId });
     if (!pendingBowlerId) return;
@@ -1122,6 +1263,28 @@ export default function LiveScoringScreen() {
     }
   };
 
+  /*
+  | The batting side's squad, for the correction picker. Mirrors bowlingPool
+  | below but resolves the BATTING team - the two are opposite sides of the
+  | same comparison, and getting it backwards would offer the fielding side
+  | as replacement batters.
+  */
+  const battingPool = (() => {
+    const innerBattingTeamId =
+      currentInnings?.battingTeam?._id || currentInnings?.battingTeam;
+
+    const teamAId = match?.teamA?._id;
+
+    const raw =
+      innerBattingTeamId && teamAId && String(innerBattingTeamId) === String(teamAId)
+        ? match?.teamASquad || []
+        : match?.teamBSquad || [];
+
+    const pool = raw.length ? raw : battingSquad;
+
+    return pool.map(normalizePlayer);
+  })();
+
   const bowlingPool = (() => {
     const bowlingTeamId =
       currentInnings?.bowlingTeam?._id || currentInnings?.bowlingTeam;
@@ -1171,6 +1334,20 @@ export default function LiveScoringScreen() {
         }
       />
 
+      {/*
+      | The scorer IS the person who controls the cameras, and this is the
+      | screen they are on for three hours.
+      |
+      | NO canManage prop. Reaching the scoring pad does NOT prove you own
+      | the cameras - the opposing captain can reach it too. The server
+      | decides, and the banner renders nothing for anyone else.
+      |
+      | flush because this screen's scrollContent already has padding: 16.
+      | Without it the banner adds its own 16 on top and ends up 32 in from
+      | each edge - narrower than every card around it.
+      */}
+      <LiveStreamBanner matchId={matchId} flush />
+
       {target != null && (
         <ChaseStats
           target={target}
@@ -1200,6 +1377,7 @@ export default function LiveScoringScreen() {
           ...bowlingFigures(bowlerId()),
         }}
         onChangeBowler={() => setNextBowlerPicker(true)}
+        onChangeBatsman={handleChangeBatsman}
         onPressPlayer={(playerId) =>
           navigation.navigate("TeamStack", {
             screen: "PlayerProfileScreen",
@@ -1326,6 +1504,97 @@ export default function LiveScoringScreen() {
               onPress={handleConfirmNextBowler}
             >
               <Text style={styles.confirmButtonText}>Confirm Bowler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/*
+        | Correction only. handleChangeBatsman never opens this for a batter
+        | who has faced a ball - that case goes to the retirement sheet,
+        | because those runs have to belong to somebody.
+      */}
+      <Modal
+        visible={!!batsmanPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBatsmanPicker(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              Replace{" "}
+              {batsmanPicker === "striker" ? "Striker" : "Non-Striker"}
+            </Text>
+
+            <ScrollView style={styles.liveMaxer}>
+              {battingPool
+                .filter((p) => {
+                  const id = String(p._id);
+
+                  /*
+                  | Nobody already at the crease - putting one player on
+                  | both ends makes strike rotation swap him with himself
+                  | and the partnership can never break. The server refuses
+                  | it too; this just keeps it off the list.
+                  */
+                  if (
+                    id === String(strikerId()) ||
+                    id === String(nonStrikerId())
+                  ) {
+                    return false;
+                  }
+
+                  /*
+                  | Nobody already out. Retired batters are NOT excluded -
+                  | retired hurt is stored with isWicket:false precisely so
+                  | they can come back, which is what Law 25.4 allows.
+                  */
+                  return !ballList.some(
+                    (b) =>
+                      b.isWicket &&
+                      String(
+                        b.dismissedPlayerId?._id ||
+                          b.dismissedPlayerId ||
+                          b.batsmanId?._id ||
+                          b.batsmanId ||
+                          "",
+                      ) === id,
+                  );
+                })
+                .map((player) => (
+                  <TouchableOpacity
+                    key={player._id}
+                    style={[
+                      styles.playerRow,
+                      pendingBatsmanId === player._id &&
+                        styles.playerRowSelected,
+                    ]}
+                    onPress={() => setPendingBatsmanId(player._id)}
+                  >
+                    <Text style={styles.playerRowText}>
+                      {player.playerName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[
+                styles.confirmButton,
+                !pendingBatsmanId && styles.confirmButtonDisabled,
+              ]}
+              disabled={!pendingBatsmanId}
+              onPress={handleConfirmBatsman}
+            >
+              <Text style={styles.confirmButtonText}>Confirm Batsman</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelLink}
+              onPress={() => setBatsmanPicker(null)}
+            >
+              <Text style={styles.cancelLinkText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1476,6 +1745,23 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     color: COLORS.onPrimary,
     fontWeight: "700",
+  },
+
+  /*
+  | The batsman picker needs a way out that is not a system back gesture -
+  | the bowler picker has none because a new bowler is mandatory between
+  | overs, but a correction is always abandonable.
+  */
+  cancelLink: {
+    marginTop: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+
+  cancelLinkText: {
+    color: COLORS.onSurfaceVariant,
+    fontWeight: "600",
+    fontSize: 13,
   },
 
 

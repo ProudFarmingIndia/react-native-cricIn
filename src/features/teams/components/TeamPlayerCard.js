@@ -12,13 +12,42 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 
 import { COLORS } from "../../../constants/colors";
 
+/*
+|--------------------------------------------------------------------------
+| Squad status ribbon
+|--------------------------------------------------------------------------
+|
+| A player who has been invited but has not answered yet is NOT in the
+| squad - createLocalPlayer raises a PENDING invitation instead of pushing
+| them into team.players. Without a ribbon they would either be invisible
+| (confusing: "I just added them") or indistinguishable from a real squad
+| member (worse: a captain picks an XI containing someone who never
+| agreed to play).
+|
+| ACCEPTED gets no ribbon at all. Marking the normal case is noise - the
+| ribbon exists to flag the exceptions.
+*/
+
+const STATUS_STYLE = {
+  PENDING: { label: "Pending", background: "#FFF3CD", text: "#8F4E00" },
+  REJECTED: { label: "Declined", background: "#FFDAD6", text: "#93000A" },
+  CANCELLED: { label: "Cancelled", background: "#E5EAE0", text: "#40493D" },
+  EXPIRED: { label: "Expired", background: "#E5EAE0", text: "#40493D" },
+};
+
 export default function TeamPlayerCard({
   player,
   team,
   onPress,
   canManage = false,
   onRemove,
+  /*
+  | One of the invitation statuses, or undefined for a confirmed member.
+  | "ACCEPTED" is accepted too and deliberately renders nothing.
+  */
+  invitationStatus,
 }) {
+  const ribbon = STATUS_STYLE[String(invitationStatus || "").toUpperCase()];
   /*
   |--------------------------------------------------------------------------
   | Leadership
@@ -58,6 +87,12 @@ export default function TeamPlayerCard({
   return (
     <TouchableOpacity
       activeOpacity={0.9}
+      /*
+      | The ribbon is absolutely positioned against this card. A View is
+      | already position:"relative" by default in React Native, so no extra
+      | style is needed - but the card has padding:14 and rounded corners,
+      | so the ribbon carries a matching borderTopRightRadius to sit flush.
+      */
       style={styles.card}
       onPress={() => onPress?.(player)}
     >
@@ -148,6 +183,17 @@ export default function TeamPlayerCard({
           color={COLORS.onSurfaceVariant}
         />
       </View>
+
+      {!!ribbon && (
+        <View
+          style={[styles.ribbon, { backgroundColor: ribbon.background }]}
+          accessibilityLabel={`Invitation ${ribbon.label}`}
+        >
+          <Text style={[styles.ribbonText, { color: ribbon.text }]}>
+            {ribbon.label}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -172,6 +218,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
 
     justifyContent: "space-between",
+  },
+
+  ribbon: {
+    position: "absolute",
+
+    top: 0,
+
+    right: 0,
+
+    paddingHorizontal: 10,
+
+    paddingVertical: 3,
+
+    /* Matches the card's own borderRadius so the corner stays clean. */
+    borderTopRightRadius: 15,
+
+    borderBottomLeftRadius: 10,
+  },
+
+  ribbonText: {
+    fontSize: 10,
+
+    fontWeight: "800",
+
+    letterSpacing: 0.4,
+
+    textTransform: "uppercase",
   },
 
   leftSection: {

@@ -7,9 +7,10 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation, useFocusEffect, useRoute } from "@react-navigation/native";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
 
@@ -20,6 +21,10 @@ import {
   getUpcomingMatchesApi,
   getRecentMatchesApi,
 } from "../../features/matches/services/matches.services";
+
+import { getLiveStreamingFeedApi } from "../../features/liveStream/services/liveStream.service";
+
+import LiveStreamCard from "../../features/liveStream/components/LiveStreamCard";
 
 import { COLORS } from "../../constants/colors";
 
@@ -97,12 +102,49 @@ const Section = ({ label, count, children }) => (
   </>
 );
 
+/*
+|--------------------------------------------------------------------------
+| Categories
+|--------------------------------------------------------------------------
+|
+| "All" keeps the original behaviour - Live, Upcoming and Recent stacked
+| in one scroll - so nothing anyone is used to has moved. The other four
+| are shortcuts into it.
+|
+| STREAMING IS NOT A FILTER ON THE SAME DATA. The other three feeds are
+| personal: the server builds them from teams this user manages or plays
+| for. The streaming feed is public - the whole point of a broadcast is
+| that people in neither squad watch it - so it comes from a different
+| endpoint and renders a different card.
+|
+| Values are also accepted as a route param (`initialCategory`), which is
+| how the sidebar's "Live Now" and "Upcoming" items land here.
+|
+*/
+
+const CATEGORIES = [
+  { key: "all", label: "All" },
+  { key: "live", label: "Live Now" },
+  { key: "streaming", label: "Live Streaming" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "recent", label: "Results" },
+];
+
 export default function MatchesTab() {
   const navigation = useNavigation();
+
+  const route = useRoute();
+
+  const { initialCategory } = route.params || {};
+
+  const [category, setCategory] = useState(
+    CATEGORIES.some((c) => c.key === initialCategory) ? initialCategory : "all",
+  );
 
   const [liveMatches, setLiveMatches] = useState([]);
   const [upcomingMatches, setUpcomingMatches] = useState([]);
   const [recentMatches, setRecentMatches] = useState([]);
+  const [streamingMatches, setStreamingMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -117,15 +159,40 @@ export default function MatchesTab() {
     setError(null);
 
     try {
-      const [live, upcoming, recent] = await Promise.all([
+      /*
+      | allSettled, not all.
+      |
+      | The streaming feed is the newest endpoint here and the one most
+      | likely to be missing on a backend that has not been redeployed
+      | yet. With Promise.all, that single 404 would empty the entire
+      | Matches tab - live scores included - which is a catastrophic
+      | failure mode for one optional section.
+      */
+
+      const [live, upcoming, recent, streaming] = await Promise.allSettled([
         getLiveMatchesApi(),
         getUpcomingMatchesApi(),
         getRecentMatchesApi(20),
+        getLiveStreamingFeedApi(),
       ]);
 
-      setLiveMatches(Array.isArray(live) ? live : []);
-      setUpcomingMatches(Array.isArray(upcoming) ? upcoming : []);
-      setRecentMatches(Array.isArray(recent) ? recent : []);
+      const value = (settled) =>
+        settled.status === "fulfilled" && Array.isArray(settled.value)
+          ? settled.value
+          : [];
+
+      setLiveMatches(value(live));
+      setUpcomingMatches(value(upcoming));
+      setRecentMatches(value(recent));
+      setStreamingMatches(value(streaming));
+
+      if (
+        live.status === "rejected" &&
+        upcoming.status === "rejected" &&
+        recent.status === "rejected"
+      ) {
+        setError("Could not load matches.");
+      }
     } catch (e) {
       setError(
         e.response?.data?.message || e.message || "Could not load matches.",
@@ -189,6 +256,18 @@ export default function MatchesTab() {
     });
   };
 
+  /*
+  | A streamed match opens the PLAYER, not the scorecard. Somebody
+  | tapping a card with a LIVE badge and "WATCH LIVE" on it and landing
+  | on a scorecard would reasonably think the video was broken.
+  |
+  | WatchLiveScreen is on RootNavigator - see the note there - so it is
+  | addressed directly rather than through a tab's stack.
+  */
+
+  const openStream = (match) =>
+    navigation.navigate("WatchLiveScreen", { matchId: match._id });
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -197,13 +276,79 @@ export default function MatchesTab() {
     );
   }
 
+  const show = (key) => category === "all" || category === key;
+
+  /*
+  | Emptiness is judged against what the CURRENT category would render,
+  | not against the whole dataset. Otherwise "Live Streaming" with nothing
+  | on air shows a blank scroll while three finished matches sit in
+  | memory, and the screen looks broken rather than quiet.
+  */
+
   const isEmpty =
-    liveMatches.length === 0 &&
-    sortedUpcoming.length === 0 &&
-    sortedRecent.length === 0;
+    (show("live") ? liveMatches.length : 0) +
+      (show("streaming") ? streamingMatches.length : 0) +
+      (show("upcoming") ? sortedUpcoming.length : 0) +
+      (show("recent") ? sortedRecent.length : 0) ===
+    0;
 
   return (
     <View style={styles.container}>
+      {/* ── Categories ───────────────────────────────────────────── */}
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipScroll}
+        contentContainerStyle={styles.chipRow}
+      >
+        {CATEGORIES.map((item) => {
+          const active = category === item.key;
+
+          /*
+          | The count is on the chip on purpose: "Live Streaming 2" is
+          | worth a tap, "Live Streaming" with nothing behind it is a
+          | wasted one.
+          */
+
+          const count =
+            item.key === "live"
+              ? liveMatches.length
+              : item.key === "streaming"
+                ? streamingMatches.length
+                : item.key === "upcoming"
+                  ? sortedUpcoming.length
+                  : item.key === "recent"
+                    ? sortedRecent.length
+                    : 0;
+
+          return (
+            <TouchableOpacity
+              key={item.key}
+              style={[styles.chip, active && styles.chipActive]}
+              activeOpacity={0.85}
+              onPress={() => setCategory(item.key)}
+            >
+              {item.key === "streaming" && (
+                <View
+                  style={[
+                    styles.chipDot,
+                    streamingMatches.length > 0 && styles.chipDotLive,
+                  ]}
+                />
+              )}
+
+              <Text
+                style={[styles.chipText, active && styles.chipTextActive]}
+              >
+                {item.label}
+                {count > 0 ? ` ${count}` : ""}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -221,7 +366,7 @@ export default function MatchesTab() {
           </View>
         )}
 
-        {liveMatches.length > 0 && (
+        {show("live") && liveMatches.length > 0 && (
           <Section label="LIVE NOW" count={liveMatches.length}>
             {liveMatches.map((m) => (
               <MatchCard
@@ -235,7 +380,19 @@ export default function MatchesTab() {
           </Section>
         )}
 
-        {sortedUpcoming.length > 0 && (
+        {/* ── Live Streaming ─────────────────────────────────────── */}
+
+        {show("streaming") && streamingMatches.length > 0 && (
+          <Section label="LIVE STREAMING" count={streamingMatches.length}>
+            {streamingMatches.map((m) => (
+              <View key={m._id} style={styles.streamCardWrap}>
+                <LiveStreamCard match={m} onPress={openStream} />
+              </View>
+            ))}
+          </Section>
+        )}
+
+        {show("upcoming") && sortedUpcoming.length > 0 && (
           <Section label="UPCOMING" count={sortedUpcoming.length}>
             {sortedUpcoming.map((m) => (
               <MatchCard
@@ -248,7 +405,7 @@ export default function MatchesTab() {
           </Section>
         )}
 
-        {sortedRecent.length > 0 && (
+        {show("recent") && sortedRecent.length > 0 && (
           <Section label="RECENT RESULTS" count={sortedRecent.length}>
             {sortedRecent.map((m) => (
               <MatchCard
@@ -265,17 +422,26 @@ export default function MatchesTab() {
           <View style={styles.stateBlock}>
             <View style={styles.stateIcon}>
               <Ionicons
-                name="calendar-outline"
+                name={
+                  category === "streaming"
+                    ? "videocam-off-outline"
+                    : "calendar-outline"
+                }
                 size={26}
                 color={COLORS.primary}
               />
             </View>
 
-            <Text style={styles.stateTitle}>No matches yet</Text>
+            <Text style={styles.stateTitle}>
+              {category === "streaming"
+                ? "Abhi koi match live nahi hai"
+                : "No matches yet"}
+            </Text>
 
             <Text style={styles.stateText}>
-              Matches you play or score appear here. Start one with Quick
-              Score, or send a challenge to another team.
+              {category === "streaming"
+                ? "Jab kisi match par camera chalu hoga, wo yahan dikhega — chahe wo kisi bhi team ka ho."
+                : "Matches you play or score appear here. Start one with Quick Score, or send a challenge to another team."}
             </Text>
           </View>
         )}
@@ -299,6 +465,62 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 120,
+  },
+
+  /* ── Category chips ──────────────────────────────────────────── */
+
+  chipScroll: {
+    flexGrow: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surfaceContainer,
+  },
+
+  chipRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    backgroundColor: COLORS.surfaceContainerLowest,
+  },
+
+  chipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+
+  chipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.outline,
+  },
+
+  chipDotLive: {
+    backgroundColor: COLORS.error,
+  },
+
+  chipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.onSurfaceVariant,
+  },
+
+  chipTextActive: {
+    color: COLORS.onPrimary,
+  },
+
+  streamCardWrap: {
+    marginBottom: 12,
   },
 
   sectionHeader: {

@@ -79,9 +79,9 @@ export const addBall = createAsyncThunk(
 
 export const setNextBatsman = createAsyncThunk(
   "scoring/setNextBatsman",
-  async ({ inningsId, playerId }, thunkAPI) => {
+  async ({ inningsId, playerId, end }, thunkAPI) => {
     try {
-      return await setNextBatsmanApi(inningsId, playerId);
+      return await setNextBatsmanApi(inningsId, playerId, end);
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || error.message,

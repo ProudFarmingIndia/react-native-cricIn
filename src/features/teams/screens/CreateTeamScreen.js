@@ -20,6 +20,8 @@ import StepIndicator from "../../../components/common/StepIndicator";
 import TeamLogoUploader from "../components/TeamLogoUploader";
 import TeamBasicInfoSection from "../components/TeamBasicInfoSection";
 import TeamTypeSelector from "../components/TeamTypeSelector";
+import useNameAvailability from "../hooks/useNameAvailability";
+import { hasStates } from "../../../constants/geo";
 import TeamLocationSection from "../components/TeamLocationSection";
 import TeamBioSection from "../components/TeamBioSection";
 import TeamTipCard from "../components/TeamTipCard";
@@ -68,7 +70,12 @@ export default function CreateTeamScreen({ navigation }) {
 
     teamType: "Club",
 
-    country: "India",
+    /*
+    | An ISO code now, not the display name. LocationPicker and
+    | src/constants/geo.js speak codes so that state-wise and city-wise
+    | rankings can group reliably later.
+    */
+    country: "IN",
 
     state: "",
 
@@ -80,6 +87,50 @@ export default function CreateTeamScreen({ navigation }) {
 
     captain: user?._id,
   });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Is the name already taken?
+  |--------------------------------------------------------------------------
+  |
+  | Asked while the user types, so the error appears under the field and
+  | Continue is disabled - rather than letting them fill in the whole form,
+  | pick a logo, and only then be told the name is gone.
+  |
+  | The server checks the same thing on write, so this is UX, not security.
+  */
+
+  const names = useNameAvailability({
+    teamName: teamData.teamName,
+    shortName: teamData.shortName,
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Required fields
+  |--------------------------------------------------------------------------
+  |
+  | LOGO AND BIO ARE OPTIONAL. A team is perfectly usable without either,
+  | and demanding a logo before a captain can create a team is the kind of
+  | friction that loses the user at step one. Everything else is required.
+  |
+  | `state` is required only where the country HAS states - 53 countries
+  | have no subdivisions at all, and in those the field is not even
+  | rendered, so requiring it would disable Continue with nothing on screen
+  | to fix. That is the worst possible failure for a form: a dead button and
+  | no explanation.
+  */
+
+  const missing = [];
+
+  if (!teamData.teamName?.trim()) missing.push("team name");
+  if (!teamData.shortName?.trim()) missing.push("short name");
+  if (!teamData.teamType) missing.push("team type");
+  if (!teamData.country) missing.push("country");
+  if (hasStates(teamData.country) && !teamData.state) missing.push("state");
+  if (!teamData.city?.trim()) missing.push("city");
+
+  const incomplete = missing.length > 0;
 
   /*
   |--------------------------------------------------------------------------
@@ -168,7 +219,13 @@ export default function CreateTeamScreen({ navigation }) {
           uploading={uploading}
         />
 
-        <TeamBasicInfoSection teamData={teamData} updateField={updateField} />
+        <TeamBasicInfoSection
+          teamData={teamData}
+          updateField={updateField}
+          errors={names.errors}
+          checking={names.checking}
+          onBlurField={names.onBlur}
+        />
 
         <TeamTypeSelector
           value={teamData.teamType}
@@ -184,6 +241,30 @@ export default function CreateTeamScreen({ navigation }) {
 
       <TeamBottomActionBar
         loading={loading || uploading}
+        /*
+        | Disabled while a required field is empty, while a name is taken,
+        | and while a check is in flight - a fast tap during the check would
+        | otherwise submit before the answer lands and be rejected by the
+        | server, which is the exact modal this replaced.
+        |
+        | NOT disabled when a check FAILS. useNameAvailability reports no
+        | error on a network failure, so a user on bad signal can still
+        | submit and let the server have the final word.
+        */
+        disabled={incomplete || names.blocked || names.checking}
+        /*
+        | A disabled button with no explanation is the most frustrating
+        | thing a form can do - the user taps, nothing happens, and there is
+        | nothing to read. This always says which of the two reasons applies
+        | and, when fields are missing, names them.
+        */
+        helperText={
+          names.blocked
+            ? "Choose a different name to continue."
+            : incomplete
+              ? `Still needed: ${missing.join(", ")}.`
+              : ""
+        }
         title="Continue to Add Players"
         onPress={handleContinue}
       />

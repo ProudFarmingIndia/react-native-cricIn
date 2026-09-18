@@ -33,6 +33,13 @@ import {
 
 import HighlightsFeed from "../../highlights/components/HighlightsFeed";
 
+/*
+| The live-streaming strip. One line here rather than a section threaded
+| through this 2,400-line screen - it owns its own fetching and renders
+| nothing when there is nothing to say.
+*/
+import LiveStreamBanner from "../../liveStream/components/LiveStreamBanner";
+
 import CommentarySection from "../../../components/matches/LiveScoringScreen/CommentarySection";
 
 /*
@@ -1532,17 +1539,41 @@ export default function MatchDetailsScreen() {
         <HeroCard match={match} canManage={match.canManage} />
 
         {/*
-        | EITHER captain may start the match, not only the one who sent the
-        | challenge.
+        | Live streaming.
         |
-        | This was gated on isInviteSender as well as canManage, so the
-        | captain who ACCEPTED the challenge never saw a Start Match
-        | button at all - they could set the squad, do the toss and reach
-        | the lineup, and then had no way to begin. The PIN gate is what
-        | proves both sides are present; being the sender is not a
-        | qualification for starting.
+        | Self-contained: it fetches its own stream state and renders
+        | NOTHING when this match has no camera and this user could not
+        | set one up - so it does not put a dead "no stream" box on every
+        | match in the app.
+        |
+        | NO canManage prop is passed. match.canManage means "manages
+        | either team", so passing it gave BOTH captains a camera panel on
+        | every challenged match. Only the server's own answer decides.
         */}
-        {match.canManage && match.status === "upcoming" && (
+        <LiveStreamBanner matchId={matchId} />
+
+        {/*
+        | Who sees Start Match.
+        |
+        | `canStart` comes from the server and mirrors what startMatch
+        | actually authorises: either captain, OR the person recorded as
+        | the match's scorer.
+        |
+        | It was gated on `canManage` - "captain of one of the two teams" -
+        | and that had one specific victim: the TOURNAMENT AND SERIES
+        | ORGANIZER. An organizer is the fixture's scorer by default and
+        | captains neither side, so canManage was false, the button never
+        | rendered, and they could open their own tournament's match with
+        | no way to begin it.
+        |
+        | Before that it was also gated on isInviteSender, so the captain
+        | who ACCEPTED a challenge never saw it either.
+        |
+        | Being the sender, or a captain, was never the qualification. The
+        | PIN gate is what proves everyone is present - and for an
+        | organizer that means a PIN from BOTH captains.
+        */}
+        {match.canStart && match.status === "upcoming" && (
           <TouchableOpacity
             style={[styles.startButton, starting && styles.startButtonDisabled]}
             onPress={handleStartMatch}

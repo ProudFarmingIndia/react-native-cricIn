@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.cricin.app",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -26,7 +28,9 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.cricin.app",
-      "permissions": ["POST_NOTIFICATIONS"]
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -39,6 +43,11 @@
           "color": "#00490e"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "69d00eee-0d8c-421e-aa15-b6fa88617181"
+      }
+    }
   }
 }

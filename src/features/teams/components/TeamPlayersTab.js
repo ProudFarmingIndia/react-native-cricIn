@@ -8,6 +8,8 @@ import {
 
 import TeamPlayerCard from "./TeamPlayerCard";
 
+import useTeamInvitations from "../hooks/useTeamInvitations";
+
 import { COLORS } from "../../../constants/colors";
 
 export default function TeamPlayersTab({
@@ -16,6 +18,21 @@ export default function TeamPlayersTab({
   canManage = false,
   onRemovePlayer,
 }) {
+  /*
+  |--------------------------------------------------------------------------
+  | Invitation status
+  |--------------------------------------------------------------------------
+  |
+  | Same ribbon as the Add Player squad list, for the same reason: a player
+  | who was invited but has not accepted is not a squad member yet, and a
+  | captain picking an XI needs to see that here too.
+  |
+  | The request is scoped by assertCanSendInvitations on the server, so a
+  | plain member viewing someone else's team simply gets no rows and no
+  | ribbons - which is the right amount of information for them.
+  */
+
+  const { statusOf } = useTeamInvitations(team?._id);
   /*
   |--------------------------------------------------------------------------
   | Players
@@ -66,6 +83,7 @@ export default function TeamPlayersTab({
           key={String(player._id)}
           player={player}
           team={team}
+          invitationStatus={statusOf?.(player._id)}
           onPress={onPlayerPress}
           canManage={canManage}
           onRemove={onRemovePlayer}

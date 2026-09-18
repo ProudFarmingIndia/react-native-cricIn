@@ -88,6 +88,9 @@ export const ENDPOINTS = {
     MY: "/teams/my",
     ALL: "/teams/all",
     CREATE: "/teams",
+
+    /* Must stay above DETAILS on the server too - see team.routes.ts. */
+    NAME_AVAILABLE: "/teams/name-available",
     DETAILS: "/teams/:id",
     PLAYERS: "/teams/:teamId/players",
     PLAYER: "/teams/:teamId/players/:playerId",
@@ -114,6 +117,13 @@ export const ENDPOINTS = {
   TEAM_INVITATION: {
     CREATE: "/team-invitations",
     MY: "/team-invitations/my",
+
+    /*
+    | Every invitation a team has sent, with status. Declared above the
+    | ACCEPT/REJECT/DELETE id routes on the server for the same reason
+    | /name-available sits above /:id - Express matches in order.
+    */
+    TEAM: (teamId) => `/team-invitations/team/${teamId}`,
     ACCEPT: (id) => `/team-invitations/${id}/accept`,
     REJECT: (id) => `/team-invitations/${id}/reject`,
     DELETE: (id) => `/team-invitations/${id}`,
@@ -168,62 +178,174 @@ export const ENDPOINTS = {
     DELETE_ALL: "/notifications",
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | Tournaments
+  |--------------------------------------------------------------------------
+  |
+  | Mounted at /api/tournaments.
+  |
+  | "/options" and "/preview" are declared ABOVE "/:id" on the server, so
+  | they are real paths and not tournament ids. Rename either one here and
+  | it will fail with a Mongoose cast error rather than a 404.
+  |
+  | The old ADD_TEAM / COMPLETE routes are gone: a team now joins through
+  | an invite it has to accept, and a tournament completes itself when its
+  | last match is played.
+  |
+  */
+
   TOURNAMENT: {
+    OPTIONS: "/tournaments/options",
+    PREVIEW: "/tournaments/preview",
+
     LIST: "/tournaments",
     CREATE: "/tournaments",
+
     DETAILS: (id) => `/tournaments/${id}`,
-    UPDATE: (id) => `/tournaments/${id}`,
-    DELETE: (id) => `/tournaments/${id}`,
-    ADD_TEAM: (id) => `/tournaments/${id}/teams`,
-    REMOVE_TEAM: (teamId, id) => `/tournaments/${id}/teams/${teamId}`,
-    COMPLETE: (id) => `/tournaments/${id}/complete`,
+    VISIBILITY: (id) => `/tournaments/${id}/visibility`,
+    CANCEL: (id) => `/tournaments/${id}/cancel`,
+
+    /* Teams */
+    INVITE: (id) => `/tournaments/${id}/invite`,
+    RESPOND: (id) => `/tournaments/${id}/respond`,
+    JOIN_REQUEST: (id) => `/tournaments/${id}/join-request`,
+    RESPOND_JOIN_REQUEST: (id) => `/tournaments/${id}/join-request/respond`,
+    CANCEL_INVITE: (id, teamId) => `/tournaments/${id}/invite/${teamId}`,
+    REMOVE_TEAM: (id, teamId) => `/tournaments/${id}/teams/${teamId}`,
+    WITHDRAW: (id, teamId) => `/tournaments/${id}/teams/${teamId}/withdraw`,
+    SQUAD: (id, teamId) => `/tournaments/${id}/teams/${teamId}/squad`,
+
+    /* Fixtures and standings */
+    GENERATE: (id) => `/tournaments/${id}/generate-fixtures`,
+    FIXTURES: (id) => `/tournaments/${id}/fixtures`,
+    EDIT_FIXTURE: (id, matchId) => `/tournaments/${id}/fixtures/${matchId}`,
+    ASSIGN_SCORER: (id, matchId) =>
+      `/tournaments/${id}/fixtures/${matchId}/scorer`,
+    POINTS_TABLE: (id) => `/tournaments/${id}/points-table`,
+    STATS: (id) => `/tournaments/${id}/stats`,
+
+    /* Awards: reading is open, setting a winner is organizer-only. */
+    AWARDS: (id) => `/tournaments/${id}/awards`,
+    AWARD_WINNER: (id, metric) =>
+      `/tournaments/${id}/awards/${metric}/winner`,
   },
 
   /*
   |--------------------------------------------------------------------------
-  | Highlights
+  | Series
   |--------------------------------------------------------------------------
   |
-  | Best moments, computed on the server from ball-by-ball data. The global
-  | feed takes a time range and optional location filters; the per-match
-  | one needs neither, because the match is the window.
+  | Mounted at /api/series on the server.
+  |
+  | A series is two teams playing a fixed number of matches - it needs no
+  | seeding, no points table and no playoff bracket, so its surface is much
+  | smaller than a tournament's. What it does share is the shape: invite,
+  | publish, generate, edit a fixture, hand a match to a scorer, awards.
   |
   */
 
-  /*
-  |--------------------------------------------------------------------------
-  | Stats
-  |--------------------------------------------------------------------------
-  |
-  | Leaderboards and team rankings, aggregated server-side from ball-by-ball
-  | data. FILTERS returns the city/state/country values that actually exist,
-  | so the filter offers real choices rather than a free-text box.
-  |
-  */
+  SERIES: {
+    OPTIONS: "/series/options",
 
-  STATS: {
-    LEADERBOARDS: "/stats/leaderboards",
+    LIST: "/series",
+    CREATE: "/series",
 
-    TEAM_RANKINGS: "/stats/teams",
+    DETAILS: (id) => `/series/${id}`,
+    VISIBILITY: (id) => `/series/${id}/visibility`,
+    CANCEL: (id) => `/series/${id}/cancel`,
 
-    FILTERS: "/stats/filters",
-  },
+    /* Opponent */
+    INVITE: (id) => `/series/${id}/invite`,
+    RESPOND: (id) => `/series/${id}/respond`,
 
-  HIGHLIGHTS: {
-    LIST: "/highlights",
+    /* Fixtures */
+    GENERATE: (id) => `/series/${id}/generate-fixtures`,
+    FIXTURES: (id) => `/series/${id}/fixtures`,
+    EDIT_FIXTURE: (id, matchId) => `/series/${id}/fixtures/${matchId}`,
+    ASSIGN_SCORER: (id, matchId) => `/series/${id}/fixtures/${matchId}/scorer`,
 
-    FOR_MATCH: (matchId) => `/highlights/match/${matchId}`,
-  },
-
-  SCORING_REQUEST: {
-    CREATE: "/scoring-requests",
-    MINE: "/scoring-requests/mine",
-    FOR_MY_TEAMS: "/scoring-requests/for-my-teams",
-    RESPOND: (id) => `/scoring-requests/${id}/respond`,
-    CANCEL: (id) => `/scoring-requests/${id}`,
+    /* Results */
+    SCORELINE: (id) => `/series/${id}/scoreline`,
+    STATS: (id) => `/series/${id}/stats`,
+    AWARDS: (id) => `/series/${id}/awards`,
+    AWARD_WINNER: (id, metric) => `/series/${id}/awards/${metric}/winner`,
   },
 
   UPLOAD: {
     IMAGE: "/upload/image",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Live Streaming
+  |--------------------------------------------------------------------------
+  |
+  | Mounted at /api/live-streams on the server.
+  |
+  | ORDER MATTERS ON THE SERVER, NOT HERE, but it is worth knowing why the
+  | paths look the way they do: "/live", "/quick-start", "/my-assignments",
+  | ".../highlights", ".../playback-token" and ".../leave" are all declared
+  | ABOVE the /:angle routes in liveStream.routes.ts. Rename one here and
+  | it will 404 with a Mongoose cast error, not a missing-route error.
+  |
+  */
+
+  LIVE_STREAM: {
+    // Every match with a camera on it right now - the discovery feed.
+    LIVE_FEED: "/live-streams/live",
+
+    // "Go Live" with no match behind it yet. Creates a draft match too.
+    QUICK_START: "/live-streams/quick-start",
+
+    /*
+    | Matches somebody has asked YOU to film. Its own endpoint because
+    | every other feed filters by team membership, and the camera operator
+    | is routinely in neither squad - so nothing else would ever show it
+    | to them.
+    */
+    MY_ASSIGNMENTS: "/live-streams/my-assignments",
+
+    CREATE: (matchId) => `/live-streams/match/${matchId}`,
+
+    // Playback URLs, per-angle status, and the scorer's control block.
+    GET: (matchId) => `/live-streams/match/${matchId}`,
+
+    /*
+    | The overlay's endpoint. Takes ?at=<ISO> - the moment the VIDEO is
+    | showing, not the moment the request is made. See WatchLiveScreen.
+    */
+    STATE: (matchId) => `/live-streams/match/${matchId}/state`,
+
+    HIGHLIGHTS: (matchId) => `/live-streams/match/${matchId}/highlights`,
+
+    /*
+    | Signed playback. The .m3u8 alone plays nothing - this returns it
+    | with the token already attached.
+    */
+    PLAYBACK_TOKEN: (matchId, angle) =>
+      `/live-streams/match/${matchId}/playback-token/${angle}`,
+
+    // Frees the viewer slot when the player closes.
+    LEAVE: (matchId) => `/live-streams/match/${matchId}/leave`,
+
+    ASSIGN: (matchId) => `/live-streams/match/${matchId}/assign`,
+
+    RESPOND: (matchId) => `/live-streams/match/${matchId}/respond`,
+
+    KEY: (matchId, angle) =>
+      `/live-streams/match/${matchId}/key/${angle}`,
+
+    STOP: (matchId, angle) =>
+      `/live-streams/match/${matchId}/${angle}/stop`,
+
+    RESUME: (matchId, angle) =>
+      `/live-streams/match/${matchId}/${angle}/resume`,
+
+    KEEP_ALIVE: (matchId, angle) =>
+      `/live-streams/match/${matchId}/${angle}/keep-alive`,
+
+    DELETE: (matchId, angle) =>
+      `/live-streams/match/${matchId}/${angle}`,
   },
 };

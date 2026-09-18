@@ -25,9 +25,26 @@ import {
   getRecentMatchesApi,
 } from "../../matches/services/matches.services";
 
+import {
+  getLiveStreamingFeedApi,
+  getMyBroadcastAssignmentsApi,
+} from "../../liveStream/services/liveStream.service";
+
+import LiveStreamCard from "../../liveStream/components/LiveStreamCard";
+
+import TournamentCard from "../../tournaments/components/TournamentCard";
+
+import { getTournamentsApi } from "../../tournaments/services/tournament.service";
+
+import SeriesCard from "../../series/components/SeriesCard";
+
+import { getSeriesListApi } from "../../series/services/series.service";
+
 import TeamBadge from "../../../components/matches/TeamBadge";
 
 import { COLORS } from "../../../constants/colors";
+
+import { ANGLE_LABEL } from "../../liveStream/constants/streamConstants";
 
 /*
 |--------------------------------------------------------------------------
@@ -90,6 +107,41 @@ export default function HomeScreen() {
   const [liveMatches, setLiveMatches] = useState([]);
   const [upcomingMatches, setUpcomingMatches] = useState([]);
   const [recentMatches, setRecentMatches] = useState([]);
+
+  /*
+  | Two new lists, and they answer different questions.
+  |
+  | streamingMatches - "what can I watch right now", from ANY team. This
+  | is the only list on Home that is not personal, and that is the point:
+  | discovery is what makes streaming worth building.
+  |
+  | myAssignments - "somebody asked ME to film something". The person
+  | invited is routinely in neither squad, so this match appears nowhere
+  | else in their app. Without this card the invite notification is the
+  | only route back to it, and notifications get swiped away.
+  */
+
+  const [streamingMatches, setStreamingMatches] = useState([]);
+  const [myAssignments, setMyAssignments] = useState([]);
+
+  /*
+  | Running and upcoming tournaments, published by their organizers. Like
+  | the streaming feed above, this is deliberately not filtered to the
+  | user's own teams - a tournament is a public event, and the first one
+  | on the app would otherwise be visible to nobody.
+  */
+
+  const [tournaments, setTournaments] = useState([]);
+
+  /*
+  | Running and upcoming series. Its own section rather than mixed in with
+  | tournaments: the two are different things a user chooses between, and
+  | a card that says "2-1" next to one that says "8 teams" in the same
+  | strip reads as one broken list rather than two feeds.
+  */
+
+  const [seriesList, setSeriesList] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -97,20 +149,79 @@ export default function HomeScreen() {
     if (!isRefresh) setLoading(true);
 
     try {
-      const [live, upcoming, recent] = await Promise.all([
-        getLiveMatchesApi(),
-        getUpcomingMatchesApi(),
+      /*
+      | allSettled rather than all.
+      |
+      | Home is the first screen after login. With Promise.all, one
+      | failing endpoint - and the two streaming ones are the newest, so
+      | the most likely to be missing against an older backend - takes
+      | the entire home screen down to an empty state. Each list now
+      | fails on its own.
+      */
 
-        /*
-        | Capped at 5: Home is a launchpad, not an archive. The full list
-        | lives on the Matches tab, which is what "VIEW ALL" opens.
-        */
-        getRecentMatchesApi(5),
-      ]);
+      const [
+        live,
+        upcoming,
+        recent,
+        streaming,
+        assignments,
+        running,
+        soon,
+        seriesLive,
+        seriesSoon,
+      ] = await Promise.allSettled([
+          getLiveMatchesApi(),
+          getUpcomingMatchesApi(),
 
-      setLiveMatches(Array.isArray(live) ? live : []);
-      setUpcomingMatches(Array.isArray(upcoming) ? upcoming : []); // all upcoming, no cap
-      setRecentMatches(Array.isArray(recent) ? recent : []);
+          /*
+          | Capped at 5: Home is a launchpad, not an archive. The full
+          | list lives on the Matches tab, which is what "VIEW ALL" opens.
+          */
+          getRecentMatchesApi(5),
+
+          getLiveStreamingFeedApi(10),
+          getMyBroadcastAssignmentsApi(),
+
+          /*
+          | Two calls rather than one because the server's filters are
+          | mutually exclusive and there is no "either" - and a running
+          | tournament ranks above an upcoming one on Home, which one
+          | merged list would not preserve.
+          */
+          getTournamentsApi("live"),
+          getTournamentsApi("upcoming"),
+
+          getSeriesListApi("live"),
+          getSeriesListApi("upcoming"),
+        ]);
+
+      const value = (settled) =>
+        settled.status === "fulfilled" && Array.isArray(settled.value)
+          ? settled.value
+          : [];
+
+      setLiveMatches(value(live));
+      setUpcomingMatches(value(upcoming)); // all upcoming, no cap
+      setRecentMatches(value(recent));
+      setStreamingMatches(value(streaming));
+      setMyAssignments(value(assignments));
+
+      /* Running first, then upcoming, capped - Home is a launchpad. */
+      setTournaments([...value(running), ...value(soon)].slice(0, 6));
+
+      /*
+      | Deduplicated: the server's "live" filter includes scheduled series
+      | and "upcoming" includes published ones, and a series can satisfy
+      | both. Without this the same series appears twice in one strip.
+      */
+      setSeriesList(
+        [...value(seriesLive), ...value(seriesSoon)]
+          .filter(
+            (s, i, arr) =>
+              arr.findIndex((x) => String(x._id) === String(s._id)) === i,
+          )
+          .slice(0, 6),
+      );
     } catch (err) {
       console.error("[HomeScreen] Failed to load matches:", err);
     } finally {
@@ -171,6 +282,51 @@ export default function HomeScreen() {
       params: { matchId },
     });
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Live Streaming
+  |--------------------------------------------------------------------------
+  |
+  | All three targets live on RootNavigator, so they are addressed
+  | directly. Going via a tab is what pushed QuickScoreFlow onto the
+  | Matches stack and left "Matches" showing the wrong screen - the same
+  | mistake would happen here.
+  |
+  */
+
+  const openStream = (match) =>
+    navigation.navigate("WatchLiveScreen", { matchId: match._id });
+
+  const openStreamingList = () =>
+    navigation.navigate("LiveStreamingListScreen");
+
+  const openTournament = (tournament) =>
+    navigation.navigate("TournamentDetailScreen", {
+      tournamentId: tournament._id,
+    });
+
+  const openTournamentList = () =>
+    navigation.navigate("TournamentListScreen");
+
+  const openSeries = (series) =>
+    navigation.navigate("SeriesDetailScreen", { seriesId: series._id });
+
+  const openSeriesList = () => navigation.navigate("SeriesListScreen");
+
+  /*
+  | A pending invite goes to the accept screen; an accepted one goes
+  | straight to the stream key. Sending a pending invite to the setup
+  | screen shows "can't get the key" - true, but it reads as a bug.
+  */
+
+  const openAssignment = (item) =>
+    navigation.navigate(
+      item.needsResponse || item.assignmentStatus === "pending"
+        ? "BroadcastInviteScreen"
+        : "BroadcastSetupScreen",
+      { matchId: item.matchId, angle: item.angle },
+    );
 
   const totalAttention =
     liveMatches.length +
@@ -236,6 +392,192 @@ export default function HomeScreen() {
                 : "Complete your profile to unlock advanced scout analytics."}
             </Text>
           </TouchableOpacity>
+        )}
+
+        {/* ── Your Camera Duty ─────────────────────────────────── */}
+
+        {/*
+        | Above everything, including your own matches.
+        |
+        | This is not news to read, it is a job somebody has given you
+        | with a ground to get to - and if it is a pending invite, the
+        | scorer is standing at that ground waiting for an answer. It is
+        | also the only place in the whole app this match appears for a
+        | person who is in neither squad.
+        */}
+
+        {!loading && myAssignments.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Your Camera Duty</Text>
+            </View>
+
+            {myAssignments.map((item) => {
+              const pending =
+                item.needsResponse || item.assignmentStatus === "pending";
+
+              const fixture = item.match || {};
+
+              return (
+                <TouchableOpacity
+                  key={`${item.matchId}-${item.angle}`}
+                  style={[
+                    styles.card,
+                    styles.dutyCard,
+                    pending && styles.dutyCardPending,
+                  ]}
+                  activeOpacity={0.85}
+                  onPress={() => openAssignment(item)}
+                >
+                  <View style={styles.dutyTop}>
+                    <MaterialIcons
+                      name={pending ? "mark-email-unread" : "videocam"}
+                      size={16}
+                      color={pending ? COLORS.secondary : COLORS.primary}
+                    />
+
+                    <Text
+                      style={[
+                        styles.dutyLabel,
+                        pending && styles.dutyLabelPending,
+                      ]}
+                    >
+                      {pending
+                        ? "INVITE — NEEDS YOUR ANSWER"
+                        : "YOU ARE FILMING"}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.dutyFixture} numberOfLines={2}>
+                    {fixture.teamA?.teamName ||
+                      fixture.title ||
+                      "Untitled match"}
+                    {fixture.teamB?.teamName
+                      ? `  vs  ${fixture.teamB.teamName}`
+                      : ""}
+                  </Text>
+
+                  <Text style={styles.dutyMeta}>
+                    {ANGLE_LABEL[item.angle] || item.angle} camera
+                    {fixture.venue ? ` · ${fixture.venue}` : ""}
+                  </Text>
+
+                  <View
+                    style={[
+                      styles.primaryButton,
+                      !pending && styles.secondaryButton,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.primaryButtonText,
+                        !pending && styles.secondaryButtonText,
+                      ]}
+                    >
+                      {pending ? "OPEN INVITE →" : "OPEN SETUP →"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </>
+        )}
+
+        {/* ── Live Streaming ───────────────────────────────────── */}
+
+        {/*
+        | The one section on Home that is NOT about this user's own
+        | matches. A stranger's game with a camera on it is the whole
+        | reason streaming exists - gating this to followed teams would
+        | mean the first person to stream a match has an audience of
+        | nobody.
+        */}
+
+        {!loading && streamingMatches.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Live Streaming</Text>
+
+              <TouchableOpacity onPress={openStreamingList}>
+                <Text style={styles.seeAll}>VIEW ALL</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.upcomingSlider}
+            >
+              {streamingMatches.map((m) => (
+                <View key={m._id} style={styles.streamSlide}>
+                  <LiveStreamCard match={m} onPress={openStream} />
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* ── Tournaments ──────────────────────────────────────── */}
+
+        {/*
+        | Sits above "Your Matches" on purpose. A tournament in progress
+        | is the biggest thing happening on the app on any given weekend,
+        | and it is also the one thing a user cannot find anywhere else on
+        | this screen - their own matches already appear three times below.
+        */}
+
+        {!loading && tournaments.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Tournaments</Text>
+
+              <TouchableOpacity onPress={openTournamentList}>
+                <Text style={styles.seeAll}>VIEW ALL</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.upcomingSlider}
+            >
+              {tournaments.map((t) => (
+                <View key={String(t._id)} style={styles.tournamentSlide}>
+                  <TournamentCard
+                    tournament={t}
+                    compact
+                    onPress={openTournament}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* ── Series ───────────────────────────────────────────── */}
+
+        {!loading && seriesList.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Series</Text>
+
+              <TouchableOpacity onPress={openSeriesList}>
+                <Text style={styles.seeAll}>VIEW ALL</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.upcomingSlider}
+            >
+              {seriesList.map((s) => (
+                <View key={String(s._id)} style={styles.tournamentSlide}>
+                  <SeriesCard series={s} compact onPress={openSeries} />
+                </View>
+              ))}
+            </ScrollView>
+          </>
         )}
 
         {/* ── Your Matches Header ──────────────────────────────── */}
@@ -862,6 +1204,57 @@ export default function HomeScreen() {
             <Text style={styles.quickText}>CREATE TEAM</Text>
           </TouchableOpacity>
         </View>
+
+        {/*
+        | Watch Live is a quick action rather than a permanent section,
+        | because most of the time there is nothing streaming and a
+        | section that is empty six days a week teaches people to scroll
+        | past it. The section above appears only when there IS something;
+        | this button is always there for the person who came looking.
+        */}
+
+        <View style={styles.quickGrid}>
+          <TouchableOpacity
+            onPress={openStreamingList}
+            style={styles.quickCard}
+          >
+            <View style={styles.quickIcon}>
+              <MaterialIcons
+                name="live-tv"
+                size={22}
+                color={COLORS.primary}
+              />
+            </View>
+
+            <Text style={styles.quickText}>WATCH LIVE</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate("MainTabs", {
+                screen: "Matches",
+                params: {
+                  screen: "MatchesScreen",
+                  params: {
+                    initialTab: "Matches",
+                    initialCategory: "upcoming",
+                  },
+                },
+              })
+            }
+            style={styles.quickCard}
+          >
+            <View style={styles.quickIcon}>
+              <MaterialIcons
+                name="event"
+                size={22}
+                color={COLORS.primary}
+              />
+            </View>
+
+            <Text style={styles.quickText}>UPCOMING</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1255,6 +1648,60 @@ const styles = StyleSheet.create({
     marginTop: 0,
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
+  },
+
+  /* ── Live streaming ───────────────────────────────────────────────── */
+
+  streamSlide: {
+    width: 300,
+  },
+
+  /* ── Tournaments ──────────────────────────────────────────────────── */
+
+  tournamentSlide: {
+    width: 300,
+  },
+
+  /* ── Camera duty ──────────────────────────────────────────────────── */
+
+  dutyCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+
+  dutyCardPending: {
+    borderLeftColor: COLORS.secondaryContainer,
+    backgroundColor: "#fffdf8",
+  },
+
+  dutyTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  dutyLabel: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.9,
+    color: COLORS.primary,
+  },
+
+  dutyLabelPending: {
+    color: COLORS.secondary,
+  },
+
+  dutyFixture: {
+    marginTop: 9,
+    fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.onSurface,
+  },
+
+  dutyMeta: {
+    marginTop: 3,
+    fontSize: 12,
+    color: COLORS.onSurfaceVariant,
   },
 
   upcomingTop: {

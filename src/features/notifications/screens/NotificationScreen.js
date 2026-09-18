@@ -42,6 +42,31 @@ import { acceptChallengeApi, rejectChallengeApi } from "../../matchChallenges/se
 import { getMatchByIdApi } from "../../matches/services/matches.services";
 
 /*
+| Answering a camera invite. The same call the invite screen makes -
+| accepting is what mints the stream key, so it has to be the real
+| endpoint and not a local flag.
+*/
+import { respondToBroadcastApi } from "../../liveStream/services/liveStream.service";
+
+/*
+| Answering a tournament invite, and an organizer answering a team's
+| request to join. Both are the same server calls the tournament screens
+| make - accepting from the list has to be the real endpoint, because
+| accepting is what puts the team in and fixes its seed.
+*/
+import {
+  respondToTournamentInviteApi,
+  respondJoinRequestApi,
+} from "../../tournaments/services/tournament.service";
+
+/*
+| Answering a series challenge. One invite, one opponent captain - and the
+| organizer cannot generate a single fixture until it is answered, which
+| is why it is answerable straight from the list.
+*/
+import { respondToSeriesInviteApi } from "../../series/services/series.service";
+
+/*
 |--------------------------------------------------------------------------
 | Notification Screen
 |--------------------------------------------------------------------------
@@ -249,6 +274,10 @@ export default function NotificationScreen() {
     // then deep-fetch it and jump straight into squad selection.
     let squadNavigation = null;
 
+    // Same idea for a camera invite: accepting is what mints the stream
+    // key, so we take them to it rather than back to the list.
+    let broadcastNavigation = null;
+
     switch (notification.type) {
       case NOTIFICATION_TYPES.TEAM_INVITATION_RECEIVED:
         result = await acceptInvitation(notification.data.invitationId);
@@ -298,6 +327,120 @@ export default function NotificationScreen() {
         }
         break;
 
+      /*
+      |------------------------------------------------------------------
+      | Broadcast Invite
+      |------------------------------------------------------------------
+      |
+      | Accepting here is the SAME server call the invite screen makes,
+      | and it is what issues the stream key - until it happens the
+      | invite grants nothing.
+      |
+      | It then jumps straight to the key. Anyone accepting a camera
+      | invite is standing at a ground about to film; leaving them on a
+      | notification list with an "Accepted" badge and no key is the one
+      | ending that fails them.
+      |
+      */
+
+      case NOTIFICATION_TYPES.BROADCAST_INVITE_RECEIVED:
+        try {
+          await respondToBroadcastApi(
+            notification.data.matchId,
+            notification.data.angle,
+            true,
+          );
+
+          broadcastNavigation = {
+            matchId: notification.data.matchId,
+            angle: notification.data.angle,
+          };
+
+          result = { success: true };
+        } catch (error) {
+          result = {
+            success: false,
+            error: error.response?.data?.message || error.message,
+          };
+        }
+        break;
+
+      /*
+      |------------------------------------------------------------------
+      | Tournament
+      |------------------------------------------------------------------
+      |
+      | Accepting an invite from the list is the real call, not a local
+      | flag: it is what puts the team in and stamps joinedAt, which is
+      | the clock the whole seeding order is derived from. Answering a day
+      | late genuinely means a lower seed, so it has to happen when the
+      | captain taps, not when they next open the tournament.
+      |
+      | The captain still has to register a squad afterwards. That is not
+      | forced here - the detail screen carries a strip for it, and
+      | dragging somebody into a fifteen-name picker straight off a
+      | notification is not the moment.
+      |
+      */
+
+      case NOTIFICATION_TYPES.TOURNAMENT_INVITE_RECEIVED:
+        try {
+          await respondToTournamentInviteApi(
+            notification.data.tournamentId,
+            notification.data.teamId,
+            true,
+          );
+
+          result = { success: true };
+        } catch (error) {
+          result = {
+            success: false,
+            error: error.response?.data?.message || error.message,
+          };
+        }
+        break;
+
+      /* The organizer approving a team that asked to join. */
+
+      case NOTIFICATION_TYPES.TOURNAMENT_JOIN_REQUEST:
+        try {
+          await respondJoinRequestApi(
+            notification.data.tournamentId,
+            notification.data.teamId,
+            true,
+          );
+
+          result = { success: true };
+        } catch (error) {
+          result = {
+            success: false,
+            error: error.response?.data?.message || error.message,
+          };
+        }
+        break;
+
+      /*
+      |------------------------------------------------------------------
+      | Series
+      |------------------------------------------------------------------
+      |
+      | Accepting is what lets the organizer build the schedule - until it
+      | happens the series has no fixtures and nothing else can move.
+      */
+
+      case NOTIFICATION_TYPES.SERIES_INVITE_RECEIVED:
+        try {
+          await respondToSeriesInviteApi(notification.data.seriesId, true);
+
+          result = { success: true };
+        } catch (error) {
+          result = {
+            success: false,
+            error: error.response?.data?.message || error.message,
+          };
+        }
+        break;
+
       default:
         result = { success: false, error: "This notification type can't be accepted here." };
     }
@@ -328,6 +471,15 @@ export default function NotificationScreen() {
         screen: "SquadSelectionScreen",
         params: squadNavigation,
       });
+    }
+
+    /*
+    | BroadcastSetupScreen is on RootNavigator - see the note there - so
+    | it is addressed directly and not through a tab's stack.
+    */
+
+    if (broadcastNavigation?.matchId) {
+      navigation.navigate("BroadcastSetupScreen", broadcastNavigation);
     }
   };
 
@@ -389,6 +541,90 @@ export default function NotificationScreen() {
         }
         break;
 
+      /*
+      | Declining a camera invite tells the scorer immediately, so they
+      | can hand it to somebody else while they are still at the ground.
+      | That is the whole value of having a decline at all rather than
+      | letting the invite sit unanswered.
+      */
+
+      case NOTIFICATION_TYPES.BROADCAST_INVITE_RECEIVED:
+        try {
+          await respondToBroadcastApi(
+            notification.data.matchId,
+            notification.data.angle,
+            false,
+          );
+
+          result = { success: true };
+        } catch (error) {
+          result = {
+            success: false,
+            error: error.response?.data?.message || error.message,
+          };
+        }
+        break;
+
+      /*
+      | Declining a tournament invite matters more than it looks. The
+      | organizer is waiting on a fixed number of teams before they can
+      | generate fixtures, so an unanswered invite blocks the whole
+      | tournament - a decline is what lets them go and ask somebody else.
+      */
+
+      case NOTIFICATION_TYPES.TOURNAMENT_INVITE_RECEIVED:
+        try {
+          await respondToTournamentInviteApi(
+            notification.data.tournamentId,
+            notification.data.teamId,
+            false,
+          );
+
+          result = { success: true };
+        } catch (error) {
+          result = {
+            success: false,
+            error: error.response?.data?.message || error.message,
+          };
+        }
+        break;
+
+      case NOTIFICATION_TYPES.TOURNAMENT_JOIN_REQUEST:
+        try {
+          await respondJoinRequestApi(
+            notification.data.tournamentId,
+            notification.data.teamId,
+            false,
+          );
+
+          result = { success: true };
+        } catch (error) {
+          result = {
+            success: false,
+            error: error.response?.data?.message || error.message,
+          };
+        }
+        break;
+
+      /*
+      | Declining releases the opponent slot, so the organizer can go and
+      | challenge somebody else instead of the series sitting stuck on a
+      | team that will never answer.
+      */
+
+      case NOTIFICATION_TYPES.SERIES_INVITE_RECEIVED:
+        try {
+          await respondToSeriesInviteApi(notification.data.seriesId, false);
+
+          result = { success: true };
+        } catch (error) {
+          result = {
+            success: false,
+            error: error.response?.data?.message || error.message,
+          };
+        }
+        break;
+
       default:
         result = { success: false, error: "This notification type can't be rejected here." };
     }
@@ -433,6 +669,114 @@ export default function NotificationScreen() {
       navigation.navigate("QuickScoreFlow", {
         screen: "MatchApprovalScreen",
         params: { matchId: notification.data.matchId },
+      });
+
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Live Streaming
+    |--------------------------------------------------------------------------
+    |
+    | Three types, three different destinations - because sending all of
+    | them to the generic detail screen is exactly how a person ends up
+    | with a notification they cannot act on.
+    |
+    |   INVITE_RECEIVED  -> the invite screen, where they can read what
+    |                       they are agreeing to before accepting.
+    |
+    |   STREAM_LIVE      -> the PLAYER. This notification says "there is
+    |                       a picture"; opening a scorecard instead would
+    |                       be a bait and switch.
+    |
+    |   INVITE_REVOKED   -> nothing to open. The match is no longer
+    |                       theirs, and the detail screen is the honest
+    |                       place for a message with no action.
+    |
+    */
+
+    if (notification.type === NOTIFICATION_TYPES.BROADCAST_INVITE_RECEIVED) {
+      navigation.navigate("BroadcastInviteScreen", {
+        matchId: notification.data?.matchId,
+        angle: notification.data?.angle,
+      });
+
+      return;
+    }
+
+    if (notification.type === NOTIFICATION_TYPES.FOLLOWED_STREAM_LIVE) {
+      navigation.navigate("WatchLiveScreen", {
+        matchId: notification.data?.matchId,
+      });
+
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tournament
+    |--------------------------------------------------------------------------
+    |
+    | Three destinations, by who is being told and what they can do:
+    |
+    |   INVITE_RECEIVED  -> the full invite screen, where the captain sees
+    |                       the organizer, the format, the dates, the
+    |                       grounds and the prizes BEFORE answering. The
+    |                       Accept button on the card is the shortcut; this
+    |                       is the considered version, and committing six
+    |                       weekends deserves it.
+    |
+    |   JOIN_REQUEST     -> the manage screen, because approving is only
+    |                       one of the things the organizer is about to do
+    |                       and the others are all there.
+    |
+    |   everything else  -> the tournament itself. Fixtures being out, a
+    |                       scorer being appointed, a cancellation - all of
+    |                       them are answered by looking at the tournament.
+    |
+    */
+
+    if (notification.type === NOTIFICATION_TYPES.TOURNAMENT_INVITE_RECEIVED) {
+      navigation.navigate("TournamentInviteScreen", {
+        tournamentId: notification.data?.tournamentId,
+        teamId: notification.data?.teamId,
+      });
+
+      return;
+    }
+
+    if (notification.type === NOTIFICATION_TYPES.TOURNAMENT_JOIN_REQUEST) {
+      navigation.navigate("ManageTournamentScreen", {
+        tournamentId: notification.data?.tournamentId,
+      });
+
+      return;
+    }
+
+    if (notification.data?.tournamentId) {
+      navigation.navigate("TournamentDetailScreen", {
+        tournamentId: notification.data.tournamentId,
+      });
+
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Series
+    |--------------------------------------------------------------------------
+    |
+    | Every series notification opens the series itself - including the
+    | invite. There is no separate invite screen: SeriesDetailScreen puts
+    | an accept strip at the top and the format, dates, grounds and prizes
+    | directly underneath, which is more than a dedicated screen would
+    | show.
+    */
+
+    if (notification.data?.seriesId) {
+      navigation.navigate("SeriesDetailScreen", {
+        seriesId: notification.data.seriesId,
       });
 
       return;

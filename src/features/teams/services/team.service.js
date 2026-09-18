@@ -57,6 +57,67 @@ export const getTeamByIdApi = async (teamId) => {
 |--------------------------------------------------------------------------
 */
 
+/*
+| Asked on a debounce while the user types a team name, so the Create Team
+| screen can disable Continue and show the error under the field instead of
+| rejecting a filled-in form on submit.
+|
+| Only the fields that are actually being asked about are sent - an omitted
+| key means "not asked", which the server distinguishes from "empty".
+*/
+
+export const checkTeamNamesApi = async ({
+  teamName,
+  shortName,
+  excludeTeamId,
+} = {}) => {
+  const params = {};
+
+  if (teamName !== undefined) params.teamName = teamName;
+  if (shortName !== undefined) params.shortName = shortName;
+  if (excludeTeamId) params.excludeTeamId = excludeTeamId;
+
+  const response = await apiClient.get(ENDPOINTS.TEAM.NAME_AVAILABLE, {
+    params,
+  });
+
+  return unwrap(response);
+};
+
+/*
+|--------------------------------------------------------------------------
+| Team Invitations
+|--------------------------------------------------------------------------
+|
+| Every invitation this team has sent, with status, so the squad list can
+| mark a player as pending rather than leaving them invisible.
+|
+| Optional `status` narrows it server-side; the squad list wants them all.
+*/
+
+export const getTeamInvitationsApi = async (teamId, status) => {
+  const response = await apiClient.get(
+    ENDPOINTS.TEAM_INVITATION.TEAM(teamId),
+    status ? { params: { status } } : undefined,
+  );
+
+  return unwrap(response);
+};
+
+export const cancelTeamInvitationApi = async (invitationId) => {
+  const response = await apiClient.delete(
+    ENDPOINTS.TEAM_INVITATION.DELETE(invitationId),
+  );
+
+  return unwrap(response);
+};
+
+/*
+|--------------------------------------------------------------------------
+| Create Team
+|--------------------------------------------------------------------------
+*/
+
 export const createTeamApi = async (payload) => {
   const response = await apiClient.post(ENDPOINTS.TEAM.CREATE, payload);
 

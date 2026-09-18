@@ -8,6 +8,8 @@ import {
 import InfoRow from "../../../cards/InfoRow";
 import { COLORS } from "../../../constants/colors";
 import DatePickerField from "../../../components/common/DatePickerField";
+import LocationPicker from "../../../components/common/LocationPicker";
+import { formatLocation } from "../../../constants/geo";
 
 const GENDER_OPTIONS = [
   {
@@ -71,25 +73,25 @@ export default function PersonalInfoSection({
           onSelect={(value) => updateField("gender", value)}
         />
 
-        <InputField
-          label="City"
-          placeholder="City"
-          value={city || ""}
-          onChangeText={(text) => updateField("city", text)}
-        />
-
-        <InputField
-          label="State"
-          placeholder="State"
-          value={state || ""}
-          onChangeText={(text) => updateField("state", text)}
-        />
-
-        <InputField
-          label="Country"
-          placeholder="Country"
-          value={country || ""}
-          onChangeText={(text) => updateField("country", text)}
+        {/*
+          | Country / State / City, cascading. Replaces three free-text
+          | inputs that let "India" sit alongside "New South Wales", and
+          | that spelled the same state four different ways across users -
+          | which would have made city-wise and state-wise player rankings
+          | group on typos. Same component as the Create Team screen.
+        */}
+        <LocationPicker
+          value={{ country, state, city }}
+          onChange={(location) => {
+            /*
+            | All three written every time: changing the country clears the
+            | state and city, and those clears must reach the profile state
+            | or the stale values are still in the payload on save.
+            */
+            updateField("country", location.country);
+            updateField("state", location.state);
+            updateField("city", location.city);
+          }}
         />
       </SectionCard>
     );
@@ -103,11 +105,15 @@ export default function PersonalInfoSection({
 
       <InfoRow label="Gender" value={gender || ""} />
 
-      <InfoRow label="City" value={city || ""} />
-
-      <InfoRow label="State" value={state || ""} />
-
-      <InfoRow label="Country" value={country || ""} />
+      {/*
+        | One row instead of three. The stored values are ISO codes now
+        | ("IN", "UP"), so they have to be resolved to names for display -
+        | printing the raw code would show the user "UP".
+      */}
+      <InfoRow
+        label="Location"
+        value={formatLocation({ country, state, city })}
+      />
 
       {!!bio && (
         <View style={styles.bioContainer}>

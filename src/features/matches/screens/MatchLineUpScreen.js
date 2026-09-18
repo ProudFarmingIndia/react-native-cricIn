@@ -8,14 +8,14 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Modal,
-  TextInput,
 } from "react-native";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
 
 import { createInningsApi } from "../../scoring/services/scoring.service";
-import { startMatchApi } from "../services/matches.services";
+import { startMatchApi, getMatchByIdApi } from "../services/matches.services";
+
+import MatchPinGate from "../../../components/matches/MatchPinGate";
 
 import { COLORS } from "../../../constants/colors";
 
@@ -35,6 +35,22 @@ import { COLORS } from "../../../constants/colors";
 | status in one operation, and only then is the first Innings created with
 | the chosen openers. A wrong PIN writes nothing at all, so the opposing
 | captain starting later gets a genuinely clean slate.
+|
+| HOW MANY PINs
+| One per team the starter does NOT captain. The server decides that and
+| sends the list as `pinsRequired` on the match; this screen renders it.
+|
+|   Captain of one side    one PIN - the opponent's
+|   Captain of neither     TWO PINs, one from each captain
+|
+| The second case is the TOURNAMENT AND SERIES ORGANIZER. They run the
+| fixture and captain neither side, so starting it means collecting a PIN
+| from each captain - which is right: an organizer who could start a match
+| alone could start it while one team was still travelling.
+|
+| This screen used to collect exactly one PIN and send it as a flat `pin`.
+| For an organizer that could never succeed - the server wanted two and was
+| handed one - so a tournament match could not be started at all.
 */
 
 export default function MatchLineupScreen() {
@@ -65,14 +81,19 @@ export default function MatchLineupScreen() {
   const [openingBowler, setOpeningBowler] = useState(null);
   const [starting, setStarting] = useState(false);
 
-  // const [showPinModal, setShowPinModal] = useState(false);
-  // const [pin, setPin] = useState("");
-  // const [pinError, setPinError] = useState("");
-  // const [pendingInnings, setPendingInnings] = useState(null);
-
   const [showPinModal, setShowPinModal] = useState(false);
-  const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
+
+  /*
+  | Which PINs to ask for, from the server. Never derived here - the rule
+  | lives in one place on the server and this screen renders its answer, so
+  | what is asked for and what is checked cannot disagree.
+  |
+  | Empty array is a real answer too: somebody who captains BOTH teams owes
+  | nobody a PIN, and the gate is skipped entirely.
+  */
+
+  const [pinSides, setPinSides] = useState(null);
 
   const handleSelectBatter = (player) => {
     if (striker?._id === player._id) {
@@ -108,19 +129,59 @@ export default function MatchLineupScreen() {
       return;
     }
 
-    // Open the PIN modal FIRST. Nothing is created until the opponent's
-    // PIN is confirmed, so a cancel or wrong PIN leaves no orphaned innings.
-    setPin("");
+    /*
+    | Ask the server which PINs are needed, THEN open the gate. Nothing is
+    | created until they are accepted, so a cancel or a wrong PIN leaves no
+    | orphaned innings behind.
+    |
+    | Fetched at this moment rather than carried in route params because
+    | the setup screens are slow - squads, then the toss - and a captain
+    | can be added to a team in between. The answer has to be current at
+    | the moment it is used.
+    */
+
     setPinError("");
-    setShowPinModal(true);
+
+    try {
+      setStarting(true);
+
+      const match = await getMatchByIdApi(matchId);
+
+      const sides = match?.pinsRequired || [];
+
+      setPinSides(sides);
+
+      /*
+      | Nobody to prove anything to - they captain both sides. Start
+      | straight away rather than opening an empty modal with a Start
+      | button in it.
+      */
+
+      if (sides.length === 0) {
+        await beginMatch({});
+
+        return;
+      }
+
+      setShowPinModal(true);
+    } catch (error) {
+      Alert.alert(
+        "Match load nahi hua",
+        error.response?.data?.message ||
+          error.message ||
+          "Dobara try karo.",
+      );
+    } finally {
+      setStarting(false);
+    }
   };
 
-  const handleConfirmPin = async () => {
-    if (!pin || pin.length !== 4) {
-      setPinError("Enter the 4-digit match PIN.");
-      return;
-    }
+  /*
+  | `pins` is { teamA: "1234", teamB: "5678" } - only the keys the server
+  | asked for. An empty object is the both-teams-captain case.
+  */
 
+  const beginMatch = async (pins) => {
     try {
       setStarting(true);
 
@@ -135,12 +196,22 @@ export default function MatchLineupScreen() {
       | Nothing is written until the opponent's PIN is accepted.
       */
 
-      await startMatchApi(matchId, pin, {
-        teamASquad,
-        teamBSquad,
-        tossWinner,
-        tossDecision,
-      });
+      await startMatchApi(
+        matchId,
+        /*
+        | The flat `pin` is only meaningful when exactly one is required,
+        | and the server ignores it otherwise. Sent for the single-PIN case
+        | so older backends keep working; `pins` is what actually gates.
+        */
+        Object.keys(pins).length === 1 ? Object.values(pins)[0] : undefined,
+        {
+          teamASquad,
+          teamBSquad,
+          tossWinner,
+          tossDecision,
+        },
+        pins,
+      );
 
       /*
       | 2) Then the innings, with THIS captain's openers.
@@ -170,15 +241,28 @@ export default function MatchLineupScreen() {
       });
     } catch (error) {
       /*
-      | The server's message is the useful one - it names the team whose
-      | PIN was wrong, or says the innings could not be opened. "Incorrect
-      | PIN" is only the fallback.
+      | The server's message is the useful one - it NAMES the team whose
+      | PIN was wrong ("Incorrect PIN for Sharma XI"), which is the whole
+      | point when two PINs were typed. The generic line is only a
+      | fallback.
       */
-      setPinError(
+
+      const message =
         error.response?.data?.message ||
-          error.message ||
-          "Could not start the match. Try again.",
-      );
+        error.message ||
+        "Could not start the match. Try again.";
+
+      setPinError(message);
+
+      /*
+      | With no PINs required the gate never opened, so there is nothing on
+      | screen to show the error in. An Alert is the only way this person
+      | hears about it.
+      */
+
+      if (Object.keys(pins).length === 0) {
+        Alert.alert("Match start nahi hua", message);
+      }
     } finally {
       setStarting(false);
     }
@@ -277,60 +361,29 @@ export default function MatchLineupScreen() {
         )}
       </TouchableOpacity>
 
-      <Modal
+      {/*
+      | The PIN gate. One input per team this person does not captain,
+      | labelled with that team's real name - see MatchPinGate.
+      |
+      | `pinSides` comes from the server and is rendered as-is. For a
+      | tournament or series organizer it holds BOTH teams, which is the
+      | case this replaced: the old modal collected a single PIN and could
+      | never satisfy a two-PIN gate.
+      */}
+
+      <MatchPinGate
         visible={showPinModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPinModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Enter Match PIN</Text>
-            <Text style={styles.modalSubtitle}>
-              Ask the opposing captain for the 4-digit match PIN to confirm and
-              start live scoring.
-            </Text>
+        sides={pinSides || []}
+        loading={starting}
+        error={pinError}
+        onCancel={() => {
+          setShowPinModal(false);
 
-            <TextInput
-              style={styles.pinInput}
-              value={pin}
-              onChangeText={(t) => {
-                setPin(t.replace(/[^0-9]/g, "").slice(0, 4));
-                setPinError("");
-              }}
-              keyboardType="number-pad"
-              maxLength={4}
-              placeholder="••••"
-              placeholderTextColor={COLORS.outline}
-              autoFocus
-            />
+          setPinError("");
+        }}
+        onSubmit={beginMatch}
+      />
 
-            {!!pinError && <Text style={styles.pinError}>{pinError}</Text>}
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancel}
-                onPress={() => setShowPinModal(false)}
-                disabled={starting}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalConfirm}
-                onPress={handleConfirmPin}
-                disabled={starting}
-              >
-                {starting ? (
-                  <ActivityIndicator size="small" color={COLORS.onPrimary} />
-                ) : (
-                  <Text style={styles.modalConfirmText}>Confirm & Start</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -466,116 +519,5 @@ const styles = StyleSheet.create({
     color: COLORS.onPrimary,
     fontWeight: "700",
     fontSize: 16,
-  },
-
-  // ── PIN Modal ──────────────────────────────────────────────────────────
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  modalCard: {
-    width: "100%",
-    backgroundColor: COLORS.surfaceContainerLowest,
-    borderRadius: 16,
-    padding: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.onSurface,
-    textAlign: "center",
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: COLORS.onSurfaceVariant,
-    textAlign: "center",
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  pinInput: {
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    borderRadius: 12,
-    paddingVertical: 14,
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: 12,
-    textAlign: "center",
-    color: COLORS.onSurface,
-  },
-  pinError: {
-    color: COLORS.error,
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: 8,
-  },
-  modalActions: {
-    flexDirection: "row",
-    marginTop: 20,
-  },
-  modalCancel: {
-    flex: 1,
-    height: 52,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  modalCancelText: {
-    color: COLORS.onSurface,
-    fontWeight: "700",
-  },
-  modalConfirm: {
-    flex: 1,
-    height: 52,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalConfirmText: {
-    color: COLORS.onPrimary,
-    fontWeight: "700",
-  },
-
-  cancelButton: {
-    flex: 1,
-    height: 50,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-
-  cancelText: {
-    color: COLORS.onSurface,
-    fontWeight: "700",
-  },
-
-  confirmButton: {
-    flex: 1,
-    height: 50,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  confirmButtonDisabled: {
-    opacity: 0.5,
-  },
-
-  confirmText: {
-    color: COLORS.onPrimary,
-    fontWeight: "700",
-  },
+  }
 });

@@ -74,13 +74,36 @@ export default function WicketDismissalModal() {
     | list offers players who have been dismissed - see availableNewBatsmen.
     */
     dismissedPlayerIds = [],
+
+    /*
+    |------------------------------------------------------------------------
+    | Opened from the Change Batsman control
+    |------------------------------------------------------------------------
+    |
+    | `retirementOnly` narrows the type list to the two retirements, and
+    | `preselectPlayerId` fixes which batter it is about - both known,
+    | because the scorer tapped that batter's own row to get here.
+    |
+    | Without these the scorer would arrive at a full wicket sheet after
+    | asking to change a batsman, and could record a "bowled" against a
+    | player nobody bowled to.
+    */
+    retirementOnly = false,
+    preselectPlayerId = null,
   } = route.params || {};
 
   const { addBall } = useScoring();
 
   // State
   const [dismissalKey, setDismissalKey] = useState(null);
-  const [outBatsmanId, setOutBatsmanId] = useState(null);
+
+  /*
+  | Pre-set when the scorer arrived from a batter's Change control, so they
+  | do not have to pick a player they already identified by tapping.
+  */
+  const [outBatsmanId, setOutBatsmanId] = useState(
+    preselectPlayerId ? String(preselectPlayerId) : null,
+  );
   const [fielderId, setFielderId] = useState(null);
   const [newBatsmanId, setNewBatsmanId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -97,6 +120,20 @@ export default function WicketDismissalModal() {
 
   // Dismissal helpers (memoized)
   const dismissalMeta = useCallback((key) => DISMISSAL_TYPES.find((d) => d.key === key) || {}, []);
+
+  /*
+  | The only lawful ways a batter who has faced a ball can leave the crease
+  | without being dismissed. Retired hurt keeps isWicket:false so they stay
+  | eligible to return at the next fall of a wicket (Law 25.4); retired out
+  | counts as a wicket with no bowler credit.
+  */
+  const visibleTypes = useMemo(
+    () =>
+      retirementOnly
+        ? DISMISSAL_TYPES.filter((d) => d.isRetirement)
+        : DISMISSAL_TYPES,
+    [retirementOnly],
+  );
   const needsFielder = useCallback((key) => dismissalMeta(key).needsFielder === true, [dismissalMeta]);
   const allowBatsmanChoice = useCallback((key) => dismissalMeta(key).allowBatsmanChoice === true, [dismissalMeta]);
   const creditsBowler = useCallback((key) => dismissalMeta(key).creditsBowler !== false, [dismissalMeta]);
@@ -273,12 +310,16 @@ export default function WicketDismissalModal() {
     <Modal visible transparent animationType="slide">
       <View style={styles.overlay}>
         <View style={[styles.card, { maxHeight: MODAL_MAX_HEIGHT }]}>
-          <Text style={styles.title}>Record Wicket</Text>
+          <Text style={styles.title}>
+            {retirementOnly ? "Retire Batsman" : "Record Wicket"}
+          </Text>
 
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
-            <Text style={styles.label}>Dismissal Type</Text>
+            <Text style={styles.label}>
+              {retirementOnly ? "Reason" : "Dismissal Type"}
+            </Text>
             <View style={styles.chipRow}>
-              {DISMISSAL_TYPES.map((d) => (
+              {visibleTypes.map((d) => (
                 <TouchableOpacity key={d.key} style={[styles.chip, dismissalKey === d.key && styles.chipSelected]} onPress={() => setDismissalKey(d.key)}>
                   <Text style={[styles.chipText, dismissalKey === d.key && styles.chipTextSelected]}>{d.label}</Text>
                 </TouchableOpacity>

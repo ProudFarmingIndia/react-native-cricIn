@@ -1,112 +1,55 @@
 import React from "react";
 
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-} from "react-native";
-
-import Ionicons from "@expo/vector-icons/Ionicons";
+import { View, Text, StyleSheet } from "react-native";
 
 import { COLORS } from "../../../constants/colors";
 
-export default function TeamLocationSection({
-  teamData,
-  updateField,
-}) {
+import LocationPicker from "../../../components/common/LocationPicker";
+
+/*
+|--------------------------------------------------------------------------
+| Team Location
+|--------------------------------------------------------------------------
+|
+| Three free-text inputs became one cascading picker. What that fixes:
+|
+|   TYPOS BECAME DATA. "Uttar Pradesh", "uttar pradesh", "UP" and "U.P."
+|   were four different states as far as the database was concerned. City-
+|   wise and state-wise rankings are group-by queries, and free text does
+|   not group - so the rankings would have been quietly wrong, with nothing
+|   to point at.
+|
+|   NOTHING TIED THE THREE TOGETHER. You could save country "India" with
+|   state "New South Wales" and city "Tokyo" and the form was happy.
+|
+| Values are now ISO codes for country and state ("IN", "UP") and a name
+| for the city, since cities have no ISO codes. src/constants/geo.js
+| explains the storage choice; LocationPicker handles the cascade.
+*/
+
+export default function TeamLocationSection({ teamData, updateField }) {
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>
-        Team Location
-      </Text>
+      <Text style={styles.title}>Team Location</Text>
 
-      {/* Country */}
-
-      <View style={styles.field}>
-        <Text style={styles.label}>
-          Country
-        </Text>
-
-        <View style={styles.inputContainer}>
-          <Ionicons
-            name="earth-outline"
-            size={20}
-            color="#6B7280"
-          />
-
-          <TextInput
-            placeholder="India"
-            placeholderTextColor="#9CA3AF"
-            style={styles.input}
-            value={teamData.country}
-            onChangeText={(text) =>
-              updateField(
-                "country",
-                text
-              )
-            }
-          />
-        </View>
-      </View>
-
-      {/* State */}
-
-      <View style={styles.field}>
-        <Text style={styles.label}>
-          State
-        </Text>
-
-        <View style={styles.inputContainer}>
-          <Ionicons
-            name="location-outline"
-            size={20}
-            color="#6B7280"
-          />
-
-          <TextInput
-            placeholder="Delhi"
-            placeholderTextColor="#9CA3AF"
-            style={styles.input}
-            value={teamData.state}
-            onChangeText={(text) =>
-              updateField(
-                "state",
-                text
-              )
-            }
-          />
-        </View>
-      </View>
-
-      {/* City */}
-
-      <View style={styles.field}>
-        <Text style={styles.label}>
-          City
-        </Text>
-
-        <View style={styles.inputContainer}>
-          <Ionicons
-            name="business-outline"
-            size={20}
-            color="#6B7280"
-          />
-
-          <TextInput
-            placeholder="New Delhi"
-            placeholderTextColor="#9CA3AF"
-            style={styles.input}
-            value={teamData.city}
-            onChangeText={(text) =>
-              updateField(
-                "city",
-                text
-              )
-            }
-          />
-        </View>
-      </View>
+      <LocationPicker
+        value={{
+          country: teamData.country,
+          state: teamData.state,
+          city: teamData.city,
+        }}
+        /*
+        | The picker hands back a whole normalised { country, state, city }.
+        | All three are written every time - changing the country clears the
+        | state and city, and those clears have to reach the form state or
+        | the stale values are still in the payload on submit.
+        */
+        onChange={(location) => {
+          updateField("country", location.country);
+          updateField("state", location.state);
+          updateField("city", location.city);
+        }}
+      />
     </View>
   );
 }
@@ -143,47 +86,5 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
 
     marginBottom: 20,
-  },
-
-  field: {
-    marginBottom: 18,
-  },
-
-  label: {
-    fontSize: 14,
-
-    fontWeight: "600",
-
-    color: "#374151",
-
-    marginBottom: 8,
-  },
-
-  inputContainer: {
-    flexDirection: "row",
-
-    alignItems: "center",
-
-    borderWidth: 1,
-
-    borderColor: "#E5E7EB",
-
-    borderRadius: 14,
-
-    backgroundColor: "#FFF",
-
-    paddingHorizontal: 14,
-
-    height: 54,
-  },
-
-  input: {
-    flex: 1,
-
-    marginLeft: 10,
-
-    fontSize: 16,
-
-    color: "#111827",
   },
 });

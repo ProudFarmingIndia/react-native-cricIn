@@ -39,10 +39,19 @@ export const addBallApi = async (payload) => {
   return unwrap(response);
 };
 
-export const setNextBatsmanApi = async (inningsId, playerId) => {
+/*
+| `end` is optional: "striker" | "nonStriker".
+|
+| Omitted for an incoming batter after a wicket - the server fills whichever
+| end addBall left vacant. Sent explicitly for a correction, where the
+| scorer knows exactly which of the two they mis-tapped and the old
+| fill-the-vacant-end guess would silently overwrite the striker.
+*/
+export const setNextBatsmanApi = async (inningsId, playerId, end) => {
   const response = await apiClient.put(ENDPOINTS.SCORING.SET_NEXT_BATSMAN, {
     inningsId,
     playerId,
+    ...(end ? { end } : {}),
   });
   return unwrap(response);
 };
