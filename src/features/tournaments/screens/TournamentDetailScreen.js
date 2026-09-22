@@ -48,6 +48,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
+  Pressable,
 } from "react-native";
 
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
@@ -69,7 +71,10 @@ import PlayerPickerModal from "../components/PlayerPickerModal";
 
 import HighlightsFeed from "../../highlights/components/HighlightsFeed";
 
-import { setAwardWinnerApi } from "../services/tournament.service";
+import {
+  setAwardWinnerApi,
+  requestToJoinApi,
+} from "../services/tournament.service";
 
 import {
   STATUS_META,
@@ -124,6 +129,9 @@ export default function TournamentDetailScreen() {
     loadSection,
     isOrganizer,
     myInvite,
+    canRequestJoin,
+    myJoinableTeams,
+    myJoinRequests,
     showsTable,
     isFinished,
   } = useTournament(tournamentId);
@@ -141,6 +149,16 @@ export default function TournamentDetailScreen() {
   /* Which match's highlights are showing. */
 
   const [highlightMatchId, setHighlightMatchId] = useState(null);
+
+  /*
+  | The apply-with-a-team picker. A captain can hold several teams and
+  | only they know which one is entering, so this is a deliberate choice
+  | and not something the screen can default.
+  */
+
+  const [applyOpen, setApplyOpen] = useState(false);
+
+  const [applyingTeamId, setApplyingTeamId] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -290,6 +308,55 @@ export default function TournamentDetailScreen() {
     );
   };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Apply with a team
+  |--------------------------------------------------------------------------
+  |
+  | A request, not an entry. The organizer approves it from their Manage
+  | screen and only then is the team in - which is the whole point of
+  | "public participation" being a separate switch from "published". An
+  | open tournament that anybody could silently join would leave the
+  | organizer discovering strangers in their draw.
+  |
+  | Only one request is sent at a time even though the picker lists several
+  | teams, because entering two of your own sides into the same tournament
+  | is almost always a mis-tap. The strip stays available afterwards for
+  | the remaining teams, so it is still possible - just not accidental.
+  |
+  */
+
+  const applyWithTeam = async (team) => {
+    setApplyingTeamId(String(team.teamId));
+
+    try {
+      await requestToJoinApi(tournamentId, team.teamId);
+
+      setApplyOpen(false);
+
+      /*
+      | Reload rather than patching state locally: the server decides
+      | whether any joinable team is left, and after this one it may not
+      | be. A local patch would leave the strip offering a team that is
+      | now pending.
+      */
+
+      await reload(true);
+
+      Alert.alert(
+        "Request bhej di",
+        `${team.teamName} ki request organizer ko chali gayi hai. Approve hone par team tournament mein aa jayegi.`,
+      );
+    } catch (err) {
+      Alert.alert(
+        "Request nahi gayi",
+        err?.response?.data?.message || "Dobara try karo.",
+      );
+    } finally {
+      setApplyingTeamId(null);
+    }
+  };
+
   const openMatch = (match) =>
     navigation.navigate("QuickScoreFlow", {
       screen: "MatchDetailsScreen",
@@ -417,6 +484,67 @@ export default function TournamentDetailScreen() {
           </View>
 
           <Ionicons name="chevron-forward" size={18} color={COLORS.secondary} />
+        </TouchableOpacity>
+      )}
+
+      {/* ── Captain's pending join requests ───────────────────────── */}
+
+      {/*
+      | Their own application, waiting on the organizer. Flat, not
+      | tappable - there is genuinely nothing for them to do here, and a
+      | chevron that leads nowhere is worse than no chevron.
+      */}
+
+      {(myJoinRequests || []).map((team) => (
+        <View
+          key={`req-${String(team.teamId)}`}
+          style={[styles.inviteStrip, styles.pendingStrip]}
+        >
+          <Ionicons name="time-outline" size={18} color={COLORS.onSurfaceVariant} />
+
+          <View style={styles.inviteText}>
+            <Text style={styles.inviteTitle}>
+              {team.teamName} ki request bheji hui hai
+            </Text>
+
+            <Text style={styles.inviteBody}>
+              Organizer ke approve karne ka intezaar hai
+            </Text>
+          </View>
+        </View>
+      ))}
+
+      {/* ── Apply with your team ──────────────────────────────────── */}
+
+      {/*
+      | `canRequestJoin` is the server's answer, not a guess made here. It
+      | is already false when participation is invite-only, when fixtures
+      | are out, when the tournament is full, for the organizer, and when
+      | every team this person captains is already entered - so this strip
+      | never offers something that will be refused.
+      */}
+
+      {canRequestJoin && (
+        <TouchableOpacity
+          style={[styles.inviteStrip, styles.applyStrip]}
+          activeOpacity={0.85}
+          onPress={() => setApplyOpen(true)}
+        >
+          <Ionicons name="add-circle-outline" size={19} color={COLORS.primary} />
+
+          <View style={styles.inviteText}>
+            <Text style={styles.inviteTitle}>
+              Is tournament mein apni team daalo
+            </Text>
+
+            <Text style={styles.inviteBody}>
+              {myJoinableTeams.length === 1
+                ? `${myJoinableTeams[0].teamName} — request organizer ko jayegi`
+                : `${myJoinableTeams.length} teams available — kaunsi bhejni hai chuno`}
+            </Text>
+          </View>
+
+          <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
         </TouchableOpacity>
       )}
 
@@ -858,6 +986,76 @@ export default function TournamentDetailScreen() {
         onSelect={saveWinner}
         onClose={() => setPicking(null)}
       />
+
+      {/* ── Which team are you entering ───────────────────────────── */}
+
+      {/*
+      | Kept inline rather than made a shared component: it is one list of
+      | the user's own teams and it exists nowhere else in the app. The
+      | backdrop closes it, but not while a request is in flight - tapping
+      | away mid-request would leave the person unsure whether it was sent.
+      */}
+
+      <Modal
+        visible={applyOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !applyingTeamId && setApplyOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => !applyingTeamId && setApplyOpen(false)}
+        >
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Kaunsi team bhejni hai?</Text>
+
+            <Text style={styles.modalBody}>
+              Request organizer ke paas jayegi. Approve karne par team
+              "{tournament.tournamentName}" mein aa jayegi.
+            </Text>
+
+            <ScrollView style={styles.modalList} bounces={false}>
+              {(myJoinableTeams || []).map((team) => {
+                const busy = applyingTeamId === String(team.teamId);
+
+                return (
+                  <TouchableOpacity
+                    key={String(team.teamId)}
+                    style={[styles.teamRow, busy && styles.teamRowBusy]}
+                    activeOpacity={0.85}
+                    disabled={!!applyingTeamId}
+                    onPress={() => applyWithTeam(team)}
+                  >
+                    <TeamBadge team={team} size={34} />
+
+                    <Text style={styles.teamRowName} numberOfLines={1}>
+                      {team.teamName}
+                    </Text>
+
+                    {busy ? (
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                    ) : (
+                      <Ionicons
+                        name="chevron-forward"
+                        size={17}
+                        color={COLORS.onSurfaceVariant}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalCancel}
+              disabled={!!applyingTeamId}
+              onPress={() => setApplyOpen(false)}
+            >
+              <Text style={styles.modalCancelText}>Rehne do</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1022,6 +1220,86 @@ const styles = StyleSheet.create({
   inviteBody: {
     marginTop: 2,
     fontSize: 12,
+    color: COLORS.onSurfaceVariant,
+  },
+
+  /* ── Apply to join ────────────────────────────────────────────── */
+
+  /*
+  | Primary-tinted, not the invite strip's amber. An invite is somebody
+  | asking you; this is you asking them - a different action, and it
+  | should not look like a second invite sitting underneath the first.
+  */
+
+  applyStrip: {
+    backgroundColor: COLORS.surfaceContainerLowest,
+    borderColor: COLORS.primary,
+  },
+
+  pendingStrip: {
+    backgroundColor: COLORS.surfaceContainer,
+    borderColor: COLORS.outlineVariant,
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+
+  modalCard: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 26,
+  },
+
+  modalTitle: { fontSize: 16.5, fontWeight: "800", color: COLORS.onSurface },
+
+  modalBody: {
+    marginTop: 5,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: COLORS.onSurfaceVariant,
+  },
+
+  /*
+  | Capped height so a captain with a dozen teams gets a scrolling list
+  | instead of a sheet taller than the screen with the Cancel button off
+  | the bottom of it.
+  */
+
+  modalList: { marginTop: 14, maxHeight: 300 },
+
+  teamRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    backgroundColor: COLORS.surfaceContainerLowest,
+    marginBottom: 9,
+  },
+
+  teamRowBusy: { borderColor: COLORS.primary },
+
+  teamRowName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.onSurface,
+  },
+
+  modalCancel: { alignItems: "center", paddingVertical: 13, marginTop: 4 },
+
+  modalCancelText: {
+    fontSize: 13.5,
+    fontWeight: "700",
     color: COLORS.onSurfaceVariant,
   },
 

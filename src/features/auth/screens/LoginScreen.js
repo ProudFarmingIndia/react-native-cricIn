@@ -171,6 +171,18 @@ export default function LoginScreen({ navigation, route }) {
         | of running a countdown for a message that will never arrive.
         */
         delivered: result.payload?.delivered !== false,
+
+        /*
+        | Testing build: the server is running a fixed code for every
+        | number instead of sending real OTPs. It tells us so, and tells us
+        | the code, so the next screen can show both rather than leave a
+        | tester waiting for an SMS that was never sent.
+        |
+        | Both are absent once real OTPs are switched on, so the banner
+        | disappears on its own - nothing to remember to remove here.
+        */
+        testingMode: result.payload?.testingMode === true,
+        testingOtp: result.payload?.testingOtp || "",
       });
 
       return;

@@ -182,6 +182,25 @@ export default function useTournament(tournamentId) {
 
     myInvite: tournament?.myInvite || null,
 
+    /*
+    | The apply-to-join flow, answered entirely by the server.
+    |
+    | `canRequestJoin` already accounts for public participation being off,
+    | fixtures being out, the tournament being full, this user being the
+    | organizer, and them captaining no team that is not already entered -
+    | so the screen never has to re-derive any of that, and the button it
+    | draws cannot be one the server will refuse.
+    |
+    | `myJoinableTeams` is a list because a captain can hold several teams
+    | and only they know which one they are entering.
+    */
+
+    canRequestJoin: !!tournament?.canRequestJoin,
+
+    myJoinableTeams: tournament?.myJoinableTeams || [],
+
+    myJoinRequests: tournament?.myJoinRequests || [],
+
     hasFixtures: !!tournament?.fixturesGeneratedAt,
 
     showsTable: tournament?.format !== "Knockout",

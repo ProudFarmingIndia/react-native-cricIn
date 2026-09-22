@@ -896,6 +896,32 @@ export default function HomeScreen() {
                     </Text>
                   ) : null}
 
+                  {/*
+                  | Which competition this fixture belongs to.
+                  |
+                  | Without it a tournament fixture looks identical to a
+                  | one-off challenge, and the only clue is a tournament
+                  | name buried inside matchTitle. A card in a mixed feed
+                  | has to say what it is on its own.
+                  |
+                  | Only the viewer's OWN fixtures reach this list - the
+                  | full draw is in the Tournament tab.
+                  */}
+
+                  {match.tournamentName || match.seriesName ? (
+                    <View style={styles.compChip}>
+                      <MaterialIcons
+                        name={match.tournamentName ? "emoji-events" : "list-alt"}
+                        size={12}
+                        color={COLORS.secondary}
+                      />
+
+                      <Text style={styles.compChipText} numberOfLines={1}>
+                        {match.tournamentName || match.seriesName}
+                      </Text>
+                    </View>
+                  ) : null}
+
                   {/* Stacked, same reasoning as the live card. */}
                   <View style={styles.sideRow}>
                     <TeamBadge team={match.teamA} size={34} />
@@ -1757,6 +1783,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textLight,
     fontWeight: "600",
+  },
+
+  /*
+  | Tournament / series marker. Same chip geometry as pinChip so the two sit
+  | on the card as one family, but self-aligned to its own width - a
+  | competition name is a tag, not a full-width bar.
+  */
+
+  compChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    gap: 4,
+    backgroundColor: "#fff8ef",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+
+  compChipText: {
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    letterSpacing: 0.2,
   },
 
   pinChip: {

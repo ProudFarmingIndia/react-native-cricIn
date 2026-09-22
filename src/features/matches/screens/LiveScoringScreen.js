@@ -171,8 +171,37 @@ export default function LiveScoringScreen() {
   | and for the moment a second innings opens.
   */
 
+  /*
+  |--------------------------------------------------------------------------
+  | One attempt per match, not one per response
+  |--------------------------------------------------------------------------
+  |
+  | `resolving` is both this effect's guard AND one of its dependencies, so
+  | it drove itself in a circle: fire -> setResolving(true) re-runs the
+  | effect (early return) -> finally sets it false -> re-runs and fires
+  | AGAIN. When the lookup could not produce an innings - a live match
+  | between innings, a stale match id recovered from Redux - that is an
+  | unbounded retry, one request per response, for as long as the screen is
+  | open. It is what filled the log with:
+  |
+  |     [LiveScoring] loadInnings called {"inningsId": null}
+  |
+  | ...while the scorer read "Still loading this match's innings. Try again
+  | in a second" and the second never came.
+  |
+  | One attempt per match id. If it cannot be resolved, the failure is
+  | reported once and the screen stays honest instead of hammering the
+  | server.
+  */
+
+  const resolveTriedFor = useRef(null);
+
   useEffect(() => {
     if (inningsId || !matchId || resolving) return;
+
+    if (resolveTriedFor.current === String(matchId)) return;
+
+    resolveTriedFor.current = String(matchId);
 
     let cancelled = false;
 
@@ -917,10 +946,24 @@ export default function LiveScoringScreen() {
     | a raw Mongoose validation error a moment later.
     */
 
+    /*
+    | No match at all means this screen was opened with nothing to score -
+    | the sidebar's old direct jump did exactly that. An alert leaves the
+    | scorer on a dead pad with no way forward, so send them to the list of
+    | matches they actually have live and let them pick one.
+    */
+
     if (!matchId) {
       Alert.alert(
-        "Match not loaded",
-        "This scoring screen has lost track of its match. Go back to the match and open Score again.",
+        "Koi match nahi mila",
+        "Is scoring screen ko pata nahi kaunsa match hai. Apne live matches me se chuno.",
+        [
+          { text: "Rehne do", style: "cancel" },
+          {
+            text: "Live matches",
+            onPress: () => navigation.navigate("LiveScoringListScreen"),
+          },
+        ],
       );
 
       return false;
