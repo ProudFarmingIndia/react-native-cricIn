@@ -50,7 +50,12 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   ActivityIndicator,
+  ScrollView,
+  KeyboardAvoidingView,
+  Keyboard,
+  Platform,
 } from "react-native";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -118,14 +123,60 @@ export default function MatchPinGate({
   };
 
   return (
+    /*
+    |------------------------------------------------------------------
+    | Keyboard behaviour
+    |------------------------------------------------------------------
+    |
+    | Three separate problems, three separate pieces:
+    |
+    | KeyboardAvoidingView   the number pad covers the bottom of the
+    |                        screen, and the sheet is centred. With two
+    |                        PINs the Start button sat underneath the
+    |                        keyboard with no way to reach it.
+    |
+    | TouchableWithoutFeedback on the backdrop
+    |                        tapping the dimmed area outside the sheet
+    |                        now closes the keyboard instead of doing
+    |                        nothing. That is the gesture everybody tries
+    |                        first.
+    |
+    | keyboardShouldPersistTaps="handled"
+    |                        the important one. By default the FIRST tap
+    |                        on Start or Cancel while the keyboard is up
+    |                        is swallowed to dismiss the keyboard, and the
+    |                        button does not fire - so it reads as a dead
+    |                        button and people tap it twice. "handled"
+    |                        lets the button take the tap, while a tap on
+    |                        empty space still dismisses.
+    |
+    | The inputs are untouched, so tapping one focuses it and the keyboard
+    | comes back up exactly as before.
+    */
     <Modal
       visible={visible}
       transparent
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View style={styles.wrap}>
-        <View style={styles.sheet}>
+      <KeyboardAvoidingView
+        style={styles.fill}
+        /*
+        | Android resizes the window itself (Expo's default
+        | softwareKeyboardLayoutMode), so adding "height" here fights it
+        | and makes the sheet jump. iOS needs the padding.
+        */
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.wrap}>
+            <ScrollView
+              style={styles.fill}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.sheet}>
           <View style={styles.head}>
             <View style={styles.headIcon}>
               <Ionicons name="lock-closed" size={18} color={COLORS.primary} />
@@ -200,19 +251,35 @@ export default function MatchPinGate({
                 <Text style={styles.startText}>Start Match</Text>
               )}
             </TouchableOpacity>
+              </View>
+              </View>
+            </ScrollView>
           </View>
-        </View>
-      </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
+
   wrap: {
     flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+
+  /*
+  | The centring moved off `wrap` and onto the ScrollView's content:
+  | justifyContent on a scroll container with flexGrow keeps the sheet in
+  | the middle while there is room, and lets it scroll once the keyboard
+  | has taken half the screen. On `wrap` it would have centred a
+  | fixed-height box and clipped the overflow instead.
+  */
+  scrollContent: {
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.45)",
     padding: 24,
   },
 

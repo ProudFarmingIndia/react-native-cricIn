@@ -292,7 +292,7 @@ export default function MatchLineupScreen() {
               </Text>
             </View>
 
-            <View style={styles.slot}>
+            <View style={[styles.slot, styles.slotLast]}>
               <Text style={styles.slotLabel}>NON-STRIKER</Text>
               <Text style={styles.slotValue}>
                 {nonStriker?.playerName || "Not Selected"}
@@ -330,22 +330,55 @@ export default function MatchLineupScreen() {
         <View style={styles.card}>
           <Text style={styles.title}>Select Opening Bowler</Text>
 
-          <Text style={styles.selectedText}>
-            {openingBowler?.playerName || "Not Selected"}
-          </Text>
+          {/*
+          | The same slot box the openers get.
+          |
+          | It was a bare line of text, so the three choices on this screen
+          | did not look like three choices - two were in labelled boxes and
+          | the third read like a caption. Somebody scanning the screen
+          | before pressing Start had to hunt for whether the bowler was
+          | actually set.
+          |
+          | One slot rather than two, because there is one opening bowler.
+          */}
 
-          {bowlingSquad.map((player) => (
-            <TouchableOpacity
-              key={player._id}
-              style={[
-                styles.playerCard,
-                openingBowler?._id === player._id && styles.playerCardSelected,
-              ]}
-              onPress={() => setOpeningBowler(player)}
-            >
-              <Text style={styles.playerName}>{player.playerName}</Text>
-            </TouchableOpacity>
-          ))}
+          <View style={styles.slotRow}>
+            <View style={[styles.slot, styles.slotLast]}>
+              <Text style={styles.slotLabel}>OPENING BOWLER</Text>
+              <Text style={styles.slotValue}>
+                {openingBowler?.playerName || "Not Selected"}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.subheading}>Available Bowlers</Text>
+
+          {bowlingSquad.map((player) => {
+            const isSelected = openingBowler?._id === player._id;
+
+            return (
+              <TouchableOpacity
+                key={player._id}
+                style={[
+                  styles.playerCard,
+                  isSelected && styles.playerCardSelected,
+                ]}
+                /*
+                | Tap the chosen bowler again to clear it - the batters
+                | already worked that way, and a screen where two of three
+                | pickers can be undone and the third cannot is the kind of
+                | thing people blame themselves for.
+                */
+                onPress={() =>
+                  setOpeningBowler(isSelected ? null : player)
+                }
+              >
+                <Text style={styles.playerName}>{player.playerName}</Text>
+
+                {isSelected && <Text style={styles.playerTag}>Bowler</Text>}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -453,6 +486,14 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
 
+  /*
+  | Kills the trailing margin on the last slot in a row. Without it the
+  | right-hand box is 8px narrower than the left one and the pair looks
+  | very slightly crooked - and the single bowler slot stopped short of
+  | the card's edge.
+  */
+  slotLast: { marginRight: 0 },
+
   slotLabel: {
     fontSize: 11,
     fontWeight: "700",
@@ -495,12 +536,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: COLORS.primary,
-  },
-
-  selectedText: {
-    marginBottom: 12,
-    fontWeight: "600",
-    color: COLORS.onSurface,
   },
 
   button: {

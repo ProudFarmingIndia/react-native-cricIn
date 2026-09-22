@@ -1587,6 +1587,31 @@ export default function MatchDetailsScreen() {
           </TouchableOpacity>
         )}
 
+        {/*
+        | Why there is no button, for a tournament or series fixture.
+        |
+        | A captain who used to see Start Match here and now does not needs
+        | to be told the rule changed on purpose - otherwise the screen just
+        | looks broken and they go looking for the bug. It also tells them
+        | the one thing they DO have to do: hand their PIN over when the
+        | organizer asks for it.
+        */}
+        {!match.canStart &&
+          match.status === "upcoming" &&
+          match.isOrganizedFixture && (
+            <View style={styles.organizerNote}>
+              <Text style={styles.organizerNoteTitle}>
+                {match.tournamentId ? "Tournament match" : "Series match"}
+              </Text>
+
+              <Text style={styles.organizerNoteBody}>
+                Ye match organizer (ya jise unhone scoring di hai) hi start
+                karega. Tumhara kaam bas apna 4-digit PIN dena hai jab wo
+                maange — PIN Home screen pe is match ke card par hai.
+              </Text>
+            </View>
+          )}
+
         <View style={styles.tabBar}>
           <ScrollView
             horizontal
@@ -1797,6 +1822,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: 0.5,
+  },
+
+  // Organizer-starts-this note (shown in place of the button)
+  organizerNote: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: C.surfaceVariant,
+  },
+  organizerNoteTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: C.onSurface,
+  },
+  organizerNoteBody: {
+    marginTop: 4,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: C.onSurfaceVariant,
   },
 
   // Tab Bar

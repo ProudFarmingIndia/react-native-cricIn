@@ -6,7 +6,12 @@ import {
   ActivityIndicator,
   StyleSheet,
   Alert,
+  View,
+  Text,
+  TouchableOpacity,
 } from "react-native";
+
+import Ionicons from "@expo/vector-icons/Ionicons";
 
 import {
   useRoute,
@@ -260,6 +265,30 @@ export default function TeamDetailsScreen() {
     });
   };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Challenge this team
+  |--------------------------------------------------------------------------
+  |
+  | ChallengeMatchScreen already existed and was already registered in
+  | TeamStackNavigator - but nothing anywhere navigated to it, so the whole
+  | challenge flow was unreachable. This is the way in: you find a team in
+  | the Teams tab, open it, and ask them for a game.
+  |
+  | Hidden on a team you already run, because challenging yourself is
+  | refused by the server ("A team cannot challenge itself") and offering
+  | the button anyway just wastes a tap.
+  */
+
+  const canChallenge = !isOwner && !isCaptain && !isViceCaptain;
+
+  const handleChallenge = () => {
+    navigation.navigate("TeamStack", {
+      screen: "ChallengeMatchScreen",
+      params: { team: currentTeam },
+    });
+  };
+
   const handleAvailability = () => {
     navigation.navigate("TeamStack", {
       screen: "TeamAvailabilityScreen",
@@ -413,6 +442,32 @@ export default function TeamDetailsScreen() {
 
         <TeamStatsOverview team={currentTeam} />
 
+        {/* ── Challenge this team ──────────────────────────────────── */}
+
+        {canChallenge && (
+          <TouchableOpacity
+            style={styles.challengeStrip}
+            activeOpacity={0.85}
+            onPress={handleChallenge}
+          >
+            <Ionicons name="flash-outline" size={19} color={COLORS.onPrimary} />
+
+            <View style={styles.challengeText}>
+              <Text style={styles.challengeTitle}>Match ke liye challenge bhejo</Text>
+
+              <Text style={styles.challengeBody}>
+                Date, ground aur overs propose karo — inka captain accept karega
+              </Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={COLORS.onPrimary}
+            />
+          </TouchableOpacity>
+        )}
+
         <TeamTabBar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
@@ -486,5 +541,36 @@ const styles = StyleSheet.create({
 
   content: {
     paddingBottom: 40,
+  },
+
+  /* ── Challenge strip ────────────────────────────────────────────── */
+
+  challengeStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    paddingVertical: 13,
+    paddingHorizontal: 15,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+  },
+
+  challengeText: { flex: 1 },
+
+  challengeTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: COLORS.onPrimary,
+  },
+
+  challengeBody: {
+    marginTop: 2,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: COLORS.onPrimary,
+    opacity: 0.85,
   },
 });

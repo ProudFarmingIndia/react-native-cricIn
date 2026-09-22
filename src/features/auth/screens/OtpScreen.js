@@ -75,6 +75,15 @@ export default function OtpScreen({ navigation, route }) {
     dialCode,
     resendAfterSeconds = 30,
     delivered: routeDelivered = true,
+
+    /*
+    | Set by the server while the build is in testing: one fixed code works
+    | for every number and no SMS is sent. Both default to off, so the
+    | banner below simply stops rendering the day real OTPs are switched
+    | on - there is nothing here to remember to take out.
+    */
+    testingMode = false,
+    testingOtp = "",
   } = route.params || {};
 
   const country = findCountry(countryCode);
@@ -435,7 +444,40 @@ export default function OtpScreen({ navigation, route }) {
       | sit through a countdown for nothing.
       */}
 
-      {!sendFailed && !delivered && (
+      {/*
+      | Testing build: say it plainly and hand over the code.
+      |
+      | A tester who has not been told will wait for an SMS, then try to
+      | resend, then report a bug - so the honest version of this screen
+      | states what the build is and what to type, in that order.
+      */}
+
+      {!sendFailed && testingMode && (
+        <View style={styles.testBanner}>
+          <Text style={styles.testBannerTitle}>Testing build</Text>
+
+          <Text style={styles.testBannerBody}>
+            This app is still under testing, so no SMS is sent. Use this
+            code for every account:
+          </Text>
+
+          <Text style={styles.testBannerCode} selectable>
+            {testingOtp || "123456"}
+          </Text>
+
+          <Text style={styles.testBannerFoot}>
+            Real OTPs over SMS are switched on before launch.
+          </Text>
+        </View>
+      )}
+
+      {/*
+      | Not a testing build, but nothing was delivered either - the code
+      | exists and is in the server console. Keeps local development honest
+      | without promising an SMS that is not coming.
+      */}
+
+      {!sendFailed && !testingMode && !delivered && (
         <Text style={styles.devNotice}>
           Development mode - no SMS was sent. The code is in the server
           console.
@@ -691,5 +733,53 @@ const styles = StyleSheet.create({
     color: COLORS.warning,
     textAlign: "center",
     marginBottom: 14,
+  },
+
+  /*
+  | Deliberately the loudest thing on the screen. It is temporary, it is
+  | the answer to the only question the tester has, and it should be
+  | impossible to mistake this build for the real one.
+  */
+
+  testBanner: {
+    borderWidth: 1,
+    borderColor: COLORS.warning,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 18,
+    alignItems: "center",
+  },
+
+  testBannerTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: COLORS.warning,
+    marginBottom: 6,
+  },
+
+  testBannerBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
+
+  testBannerCode: {
+    fontSize: 30,
+    fontWeight: "700",
+    letterSpacing: 8,
+    color: COLORS.textPrimary,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+
+  testBannerFoot: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: COLORS.textSecondary,
+    textAlign: "center",
   },
 });

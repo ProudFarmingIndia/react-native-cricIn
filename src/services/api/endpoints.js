@@ -158,6 +158,29 @@ export const ENDPOINTS = {
       `/follows/recalculate/${targetType}/${targetId}`,
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | Stats & rankings
+  |--------------------------------------------------------------------------
+  |
+  | This block was MISSING while stats.service.js was already calling
+  | ENDPOINTS.STATS.TEAM_RANKINGS and ENDPOINTS.STATS.LEADERBOARDS. Reading
+  | a property off `undefined` throws before the request is even built, so
+  | both the Teams tab and the Stats tab died with
+  | "Cannot read property 'TEAM_RANKINGS' of undefined" - which reads like a
+  | network failure and is not one. The routes existed on the server the
+  | whole time (app.ts mounts statsRoutes at /api/stats).
+  |
+  | TEAM_RANKINGS is "/stats/teams", not "/stats/team-rankings" - the route
+  | is `router.get("/teams", ...)` in stats.routes.ts.
+  */
+
+  STATS: {
+    LEADERBOARDS: "/stats/leaderboards",
+    TEAM_RANKINGS: "/stats/teams",
+    FILTERS: "/stats/filters",
+  },
+
   SEARCH: {
     PLAYERS: "/search/players",
     PLAYER_BY_MOBILE: "/search/players/mobile",

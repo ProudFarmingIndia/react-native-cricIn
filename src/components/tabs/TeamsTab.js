@@ -68,7 +68,22 @@ export default function TeamsTab() {
       setError(null);
 
       try {
-        const data = await getTeamRankingsApi(filters);
+        /*
+        | minMatches 0 is what turns this from a league table into the
+        | team DIRECTORY. Without it the server defaults to 1 and silently
+        | drops every team that has not finished a match yet - which,
+        | early on, is most of them, and made the tab look broken to
+        | somebody who had just created a team and could not find it.
+        |
+        | The server still ranks played teams above unplayed ones, so the
+        | table at the top keeps its meaning.
+        */
+
+        const data = await getTeamRankingsApi({
+          ...filters,
+          minMatches: 0,
+          limit: 200,
+        });
 
         setRows(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -103,8 +118,18 @@ export default function TeamsTab() {
         activeOpacity={0.7}
         onPress={() => openTeam(team._id)}
       >
-        <Text style={[styles.rank, item.rank <= 3 && styles.rankTop]}>
-          {item.rank}
+        {/*
+        | A dash, not a number, for a team with no completed match. Giving
+        | them "17th" would be a rank they never played for.
+        */}
+        <Text
+          style={[
+            styles.rank,
+            item.rank != null && item.rank <= 3 && styles.rankTop,
+            item.rank == null && styles.rankNone,
+          ]}
+        >
+          {item.rank == null ? "—" : item.rank}
         </Text>
 
         {team.logo?.url ? (
@@ -131,17 +156,26 @@ export default function TeamsTab() {
           | to a points total is ambiguous - it could be either.
           */}
           <Text style={styles.record} numberOfLines={1}>
-            P {item.played} · W {item.won} · L {item.lost}
-            {item.drawn > 0 ? ` · D ${item.drawn}` : ""}
+            {item.played > 0
+              ? `P ${item.played} · W ${item.won} · L ${item.lost}${
+                  item.drawn > 0 ? ` · D ${item.drawn}` : ""
+                }`
+              : "Abhi koi match nahi khela"}
           </Text>
         </View>
 
         <View style={styles.pointsWrap}>
-          <Text style={styles.points}>{item.points}</Text>
+          {item.played > 0 ? (
+            <>
+              <Text style={styles.points}>{item.points}</Text>
 
-          <Text style={styles.pointsLabel}>PTS</Text>
+              <Text style={styles.pointsLabel}>PTS</Text>
 
-          <Text style={styles.winPct}>{item.winPercentage}%</Text>
+              <Text style={styles.winPct}>{item.winPercentage}%</Text>
+            </>
+          ) : (
+            <Text style={styles.newTag}>NEW</Text>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -153,11 +187,10 @@ export default function TeamsTab() {
         <Ionicons name="shield-outline" size={26} color={COLORS.primary} />
       </View>
 
-      <Text style={styles.stateTitle}>No ranked teams</Text>
+      <Text style={styles.stateTitle}>Koi team nahi mili</Text>
 
       <Text style={styles.stateText}>
-        Teams appear here once they have completed a match. Clear the filters
-        if you expected to see more.
+        Filters clear karke dekho — ya pehli team tum banao.
       </Text>
     </View>
   );
@@ -260,6 +293,17 @@ const styles = StyleSheet.create({
 
   rankTop: {
     color: COLORS.primary,
+  },
+
+  rankNone: {
+    color: COLORS.outlineVariant,
+  },
+
+  newTag: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    color: COLORS.secondary,
   },
 
   logo: {
