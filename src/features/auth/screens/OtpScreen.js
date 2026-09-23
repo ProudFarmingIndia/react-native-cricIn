@@ -320,12 +320,25 @@ export default function OtpScreen({ navigation, route }) {
       submittedFor.current = "";
       setSendFailed(false);
       setDelivered(wasDelivered);
-      setSeconds(result.payload?.resendAfterSeconds || 30);
+      /*
+      | `??`, not `||` - the server sends 0 in testing mode because resend is
+      | free there, and `|| 30` turned that into a countdown nobody was
+      | waiting for. See the matching note in LoginScreen.
+      */
+      setSeconds(result.payload?.resendAfterSeconds ?? 30);
 
+      /*
+      | Three different situations, three different sentences. The old copy
+      | sent a tester on a testing build to "check the server console" - a
+      | console they do not have, for a code that is already printed on this
+      | screen.
+      */
       setInfo(
         wasDelivered
           ? `A new code has been sent to ${displayDial} ${formatNational(phone, country)}.`
-          : "A new code was generated. No SMS was sent - check the server console.",
+          : testingMode
+            ? `This is a testing build - no SMS is sent. Use ${result.payload?.testingOtp || testingOtp || "123456"}.`
+            : "A new code was generated. No SMS was sent - check the server console.",
       );
 
       focusBox(0);

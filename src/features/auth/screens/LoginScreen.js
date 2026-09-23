@@ -163,7 +163,17 @@ export default function LoginScreen({ navigation, route }) {
         | be enforced. Hard-coding 30 there would show "Resend" while the
         | server still refuses.
         */
-        resendAfterSeconds: result.payload?.resendAfterSeconds || 30,
+        /*
+        | `??`, not `||`. In testing mode the server sends 0 - resend is
+        | allowed immediately because no SMS is being spent. `|| 30` treated
+        | that legitimate 0 as "missing" and made testers sit through a
+        | 30-second countdown the server was not enforcing, which is exactly
+        | the kind of thing that gets reported as "resend is broken".
+        |
+        | `??` only falls back when the field is genuinely absent, which is
+        | the case it was written for - an older server that does not send it.
+        */
+        resendAfterSeconds: result.payload?.resendAfterSeconds ?? 30,
 
         /*
         | Whether an SMS actually left. False in development with no MSG91

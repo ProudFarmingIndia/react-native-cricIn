@@ -11,6 +11,19 @@ export const ENDPOINTS = {
     PUSH_TOKEN: "/users/push-token",
     SELECT_ROLE: "/users/select-role",
     COMPLETE_PROFILE: "/users/complete-profile",
+
+    /*
+    | One login, more than one hat. ROLES says which hats this account has
+    | and which one the app is currently wearing; ACTIVE_ROLE changes the
+    | second of those.
+    |
+    | Neither grants anything - every owner action is checked against who
+    | owns the ground document, so flipping this switch changes the home
+    | screen and nothing else.
+    */
+    ROLES: "/users/roles",
+
+    ACTIVE_ROLE: "/users/active-role",
   },
 
   PLAYER: {
@@ -297,6 +310,142 @@ export const ENDPOINTS = {
 
   UPLOAD: {
     IMAGE: "/upload/image",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Grounds
+  |--------------------------------------------------------------------------
+  |
+  | Mounted at /api/grounds. Bookings and reviews live under the same mount
+  | rather than at /api/bookings, because they are only ever bookings OF a
+  | ground - one route file, one place to look when something 404s.
+  |
+  | ORDER MATTERS ON THE SERVER. Every literal path in ground.routes.ts is
+  | declared above /:id, because /:id would otherwise swallow them and the
+  | error would read "Ground nahi mila" rather than "no such route" - which
+  | sends you looking in completely the wrong place. If you rename anything
+  | here, check it is still declared before /:id there.
+  |
+  */
+
+  GROUND: {
+    /*
+    | Facility chips, pitch types, sort options, distance buckets and the
+    | policy defaults. Fetched once and cached - it is how a new facility
+    | reaches the filter bar without an app release.
+    */
+    OPTIONS: "/grounds/options",
+
+    /* Discovery. Takes latitude/longitude/radiusKm/sort/filters as params. */
+    SEARCH: "/grounds/search",
+
+    DETAILS: (groundId) => `/grounds/${groundId}`,
+
+    /* One date's slots, each marked available / booked / blocked / past. */
+    AVAILABILITY: (groundId) => `/grounds/${groundId}/availability`,
+
+    REVIEWS: (groundId) => `/grounds/${groundId}/reviews`,
+
+    /*
+    |------------------------------------------------------------------------
+    | Owner
+    |------------------------------------------------------------------------
+    */
+
+    CREATE: "/grounds",
+
+    MINE: "/grounds/mine",
+
+    UPDATE: (groundId) => `/grounds/${groundId}`,
+
+    PAUSE: (groundId) => `/grounds/${groundId}/pause`,
+
+    DELETE: (groundId) => `/grounds/${groundId}`,
+
+    UNITS: (groundId) => `/grounds/${groundId}/units`,
+
+    CREATE_UNIT: (groundId) => `/grounds/${groundId}/units`,
+
+    UPDATE_UNIT: (groundId, unitId) =>
+      `/grounds/${groundId}/units/${unitId}`,
+
+    DELETE_UNIT: (groundId, unitId) =>
+      `/grounds/${groundId}/units/${unitId}`,
+
+    BLACKOUTS: (groundId) => `/grounds/${groundId}/blackouts`,
+
+    DELETE_BLACKOUT: (groundId, blackoutId) =>
+      `/grounds/${groundId}/blackouts/${blackoutId}`,
+
+    CALENDAR: (groundId) => `/grounds/${groundId}/calendar`,
+
+    OWNER_BOOKINGS: "/grounds/mine/bookings",
+
+    OWNER_EARNINGS: "/grounds/mine/earnings",
+
+    /*
+    |------------------------------------------------------------------------
+    | Bookings
+    |------------------------------------------------------------------------
+    |
+    | Created at /grounds/bookings and not /grounds/:id/bookings - the body
+    | already carries the ground and the unit, and a ground id in the path
+    | as well would be a second source of truth for the same fact.
+    */
+
+    REQUEST_BOOKING: "/grounds/bookings",
+
+    MY_BOOKINGS: "/grounds/my-bookings",
+
+    BOOKING: (bookingId) => `/grounds/bookings/${bookingId}`,
+
+    /* Either side can do these two. */
+    CANCEL_BOOKING: (bookingId) => `/grounds/bookings/${bookingId}/cancel`,
+
+    CHECK_OUT: (bookingId) => `/grounds/bookings/${bookingId}/check-out`,
+
+    /* Player only. */
+    RESPOND_COUNTER: (bookingId) =>
+      `/grounds/bookings/${bookingId}/counter-response`,
+
+    ATTACH_MATCH: (bookingId) =>
+      `/grounds/bookings/${bookingId}/attach-match`,
+
+    ATTACHABLE_BOOKINGS: "/grounds/attachable-bookings",
+
+    /* Owner only. */
+    APPROVE_BOOKING: (bookingId) => `/grounds/bookings/${bookingId}/approve`,
+
+    REJECT_BOOKING: (bookingId) => `/grounds/bookings/${bookingId}/reject`,
+
+    COUNTER_BOOKING: (bookingId) => `/grounds/bookings/${bookingId}/counter`,
+
+    CHECK_IN: (bookingId) => `/grounds/bookings/${bookingId}/check-in`,
+
+    NO_SHOW: (bookingId) => `/grounds/bookings/${bookingId}/no-show`,
+
+    SET_PAYMENT: (bookingId) => `/grounds/bookings/${bookingId}/payment`,
+
+    /*
+    |------------------------------------------------------------------------
+    | Reviews
+    |------------------------------------------------------------------------
+    |
+    | The form is fetched per BOOKING, not per ground: the promise questions
+    | depend on what that ground committed to, and whether it can be
+    | answered at all depends on whether this booking was actually played.
+    */
+
+    REVIEW_FORM: (bookingId) => `/grounds/reviews/form/${bookingId}`,
+
+    CREATE_REVIEW: "/grounds/reviews",
+
+    UPDATE_REVIEW: (reviewId) => `/grounds/reviews/${reviewId}`,
+
+    REPLY_REVIEW: (reviewId) => `/grounds/reviews/${reviewId}/reply`,
+
+    MY_REVIEWS: "/grounds/my-reviews",
   },
 
   /*
