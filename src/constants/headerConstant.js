@@ -267,13 +267,13 @@ export const HEADER_CONFIG = {
   |
   */
   MatchDetailsScreen: {
-    title: "CricIn",
-    showMenu: true,
-    ShowCricInICon: true,
-    showBack: false,
-    showSearch: true,
-    showChat: true,
-    showNotification: true,
+    title: "Match Details",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+    showSearch: false,
+    showChat: false,
+    showNotification: false,
   },
 
   QuickScoreScreen: {
@@ -464,6 +464,136 @@ export const HEADER_CONFIG = {
 
   ManageSeriesScreen: {
     title: "Manage Series",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Grounds
+  |--------------------------------------------------------------------------
+  |
+  | NavigationHeader reads its title from THIS map keyed on the route name -
+  | not from the navigator's `options.title`. A route missing from here shows
+  | its own route name across the top, so "GroundSlotPickerScreen" would
+  | appear as the heading of the slot picker.
+  |
+  | Every grounds route is listed below for that reason. `showBack: true`
+  | everywhere except the tab root, which gets the menu instead.
+  |
+  */
+
+  GroundDetailScreen: {
+    title: "Ground",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  GroundSlotPickerScreen: {
+    title: "Slot chuno",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  BookGroundScreen: {
+    title: "Booking details",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  MyBookingsScreen: {
+    title: "Meri Bookings",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+    showNotification: true,
+  },
+
+  /* Shared by the team and the ground owner - one screen, one route. */
+  BookingDetailScreen: {
+    title: "Booking",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  RateGroundScreen: {
+    title: "Ground Rating",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  GroundReviewsScreen: {
+    title: "Reviews",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  OwnerDashboardScreen: {
+    title: "Ground Owner",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+    showNotification: true,
+  },
+
+  MyGroundsScreen: {
+    title: "Mere Grounds",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  GroundFormScreen: {
+    title: "Ground Details",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  GroundUnitsScreen: {
+    title: "Pitches aur Nets",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  UnitFormScreen: {
+    title: "Timing aur Rate",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  GroundPoliciesScreen: {
+    title: "Booking ke Rules",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  OwnerBookingsScreen: {
+    title: "Bookings",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  OwnerCalendarScreen: {
+    title: "Calendar",
+    showMenu: false,
+    ShowCricInICon: false,
+    showBack: true,
+  },
+
+  OwnerEarningsScreen: {
+    title: "Earnings",
     showMenu: false,
     ShowCricInICon: false,
     showBack: true,
